@@ -34,10 +34,10 @@ export class WorkflowStatusDO extends DurableObject {
 				this.stepStatuses = new Map(Object.entries(storedStatuses));
 			} else {
 				const steps = [
-					"process data",
-					"wait 2 seconds",
-					"wait for approval",
-					"final",
+					"ingest media",
+					"transcode & normalize",
+					"wait for editorial approval",
+					"publish to channels",
 				];
 				steps.forEach((s) => this.stepStatuses.set(s, "pending"));
 			}
