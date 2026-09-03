@@ -76,7 +76,7 @@ function App() {
 						</svg>
 						<div className="w-px h-4 bg-neutral-300/50 dark:bg-neutral-600/50" />
 						<h1 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-							Workflows Starter Template
+							Shion AV Content Pipeline
 						</h1>
 					</div>
 
