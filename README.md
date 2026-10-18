@@ -15,7 +15,7 @@ A real-time, interactive demonstration of [Cloudflare Workflows](https://develop
 ### Installation
 
 ```bash
-npm install
+npm ci
 ```
 
 ### Development
@@ -25,6 +25,28 @@ npm run dev
 ```
 
 Visit `http://localhost:5173` to see the interactive demo.
+
+### Verification and AI agents
+
+Use Node.js 24 (see `.nvmrc`). After installing dependencies, run:
+
+```bash
+npm run verify
+```
+
+This runs lint, the production build, local Workers tests, and a deployment dry
+run without publishing or requiring a Cloudflare token. Codex and ChatGPT Work
+can read [AGENTS.md](AGENTS.md); Claude Code and Shion agents can read
+[CLAUDE.md](CLAUDE.md), which imports the same instructions. In a chat without a
+local checkout, ask the agent to read these files through its GitHub connection.
+
+On Windows, `start-agent.cmd -Agent grok` starts the installed Grok CLI in this
+checkout. The launcher also accepts `codex`, `claude`, `gemini`, and `copilot`;
+add `-Check` to verify command discovery without starting a model session.
+
+The test integration uses `@cloudflare/vitest-plugin` with Vitest 5. Upgrade these
+packages together after checking peer dependencies, and commit the npm lockfile.
+The old direct runner/snapshot pins are no longer needed.
 
 ### Deployment
 
