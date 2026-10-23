@@ -48,6 +48,17 @@ The test integration uses `@cloudflare/vitest-plugin` with Vitest 5. Upgrade the
 packages together after checking peer dependencies, and commit the npm lockfile.
 The old direct runner/snapshot pins are no longer needed.
 
+Pull requests run a clean install, `npm audit --audit-level=low` (including dev
+dependencies), and `npm run verify` in GitHub Actions. The workflow uses read-only
+repository permissions and does not deploy. Run both commands locally after
+changing dependencies. An unavailable audit service is a failed check, not a
+clean scan.
+
+Use the committed lockfile with `npm ci`. Keep Vitest's UI/API and the Vite dev
+server private to your machine; avoid exposing test APIs with `--api.host` or
+enabling remote write/execute permissions. Security fixes must reach the default
+branch before Dependabot can reassess the repository's open alerts.
+
 ### Deployment
 
 ```bash
