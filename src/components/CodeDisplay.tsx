@@ -9,26 +9,26 @@ interface CodeDisplayProps {
 }
 
 // The workflow code to display (simplified for illustration)
-const WORKFLOW_CODE = `export class MyWorkflow extends WorkflowEntrypoint<Env> {
+const WORKFLOW_CODE = `export class ShionPipelineWorkflow extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent, step: WorkflowStep) {
-    // Step 1: Process some data
-    const result = await step.do('process data', async () => {
+    // Step 1: Ingest the uploaded audio/video file
+    const media = await step.do('ingest media', async () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      return { processed: true, timestamp: Date.now() };
+      return { ingested: true, durationSec: 342, timestamp: Date.now() };
     });
 
-    // Step 2: Wait 2 seconds
-    await step.sleep('wait 2 seconds', '2 seconds');
+    // Step 2: Transcode to delivery formats & normalize audio
+    await step.sleep('transcode & normalize', '2 seconds');
 
-    // Step 3: Wait for user approval
-    const approval = await step.waitForEvent('wait for approval', {
-      type: 'user-approval',
+    // Step 3: Wait for editorial approval
+    const approval = await step.waitForEvent('wait for editorial approval', {
+      type: 'editorial-approval',
       timeout: '60 minutes'
     });
 
-    // Step 4: Final step
-    await step.do('final', async () => {
-      console.log('Results:', { result, approval: approval.payload });
+    // Step 4: Publish to channels
+    await step.do('publish to channels', async () => {
+      console.log('Results:', { media, approval: approval.payload });
       await new Promise(resolve => setTimeout(resolve, 1000));
     });
   }

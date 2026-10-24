@@ -1,11 +1,12 @@
 // Export the Workflow and Durable Object classes
-export { MyWorkflow } from "./workflow";
+export { ShionPipelineWorkflow } from "./workflow";
 export { WorkflowStatusDO } from "./durable-object";
 
 /**
  * Main Worker fetch handler
  *
- * Handles API routes and WebSocket upgrade requests for workflow management:
+ * Handles API routes and WebSocket upgrade requests for the Shion AV
+ * content pipeline workflow:
  * - POST /api/workflow/start - Create new workflow instance
  * - GET /api/workflow/status/:id - Get workflow status
  * - POST /api/workflow/event/:id - Send events to workflow
@@ -18,7 +19,7 @@ export default {
 		// API: Start a new workflow instance
 		if (url.pathname === "/api/workflow/start" && request.method === "POST") {
 			try {
-				const instance = await env.MY_WORKFLOW.create({
+				const instance = await env.SHION_WORKFLOW.create({
 					params: {
 						timestamp: Date.now(),
 					},
@@ -47,7 +48,7 @@ export default {
 			}
 
 			try {
-				const instance = await env.MY_WORKFLOW.get(instanceId);
+				const instance = await env.SHION_WORKFLOW.get(instanceId);
 				const status = await instance.status();
 				return Response.json(status);
 			} catch {
@@ -76,10 +77,10 @@ export default {
 					approved: boolean;
 					comment?: string;
 				};
-				const instance = await env.MY_WORKFLOW.get(instanceId);
+				const instance = await env.SHION_WORKFLOW.get(instanceId);
 
 				await instance.sendEvent({
-					type: "user-approval",
+					type: "editorial-approval",
 					payload: body,
 				});
 

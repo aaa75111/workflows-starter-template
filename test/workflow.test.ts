@@ -1,29 +1,29 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
-describe("MyWorkflow", () => {
+describe("ShionPipelineWorkflow", () => {
 	it("completes and returns expected step result", async () => {
 		const instanceId = `test-${Date.now()}`;
 
 		await using instance = await introspectWorkflowInstance(
-			env.MY_WORKFLOW,
+			env.SHION_WORKFLOW,
 			instanceId,
 		);
 
 		await instance.modify(async (m) => {
 			await m.disableSleeps();
 			await m.mockEvent({
-				type: "user-approval",
+				type: "editorial-approval",
 				payload: { approved: true },
 			});
 		});
 
-		await env.MY_WORKFLOW.create({ id: instanceId });
+		await env.SHION_WORKFLOW.create({ id: instanceId });
 
-		const result = await instance.waitForStepResult({ name: "process data" });
+		const result = await instance.waitForStepResult({ name: "ingest media" });
 
 		expect(result).toMatchObject({
-			processed: true,
+			ingested: true,
 		});
 		expect(result).toHaveProperty("timestamp");
 	});
@@ -32,16 +32,16 @@ describe("MyWorkflow", () => {
 		const instanceId = `test-${Date.now()}`;
 
 		await using instance = await introspectWorkflowInstance(
-			env.MY_WORKFLOW,
+			env.SHION_WORKFLOW,
 			instanceId,
 		);
 
 		await instance.modify(async (m) => {
 			await m.disableSleeps();
-			await m.forceEventTimeout({ name: "wait for approval" });
+			await m.forceEventTimeout({ name: "wait for editorial approval" });
 		});
 
-		await env.MY_WORKFLOW.create({ id: instanceId });
+		await env.SHION_WORKFLOW.create({ id: instanceId });
 
 		await expect(instance.waitForStatus("errored")).resolves.not.toThrow();
 	});

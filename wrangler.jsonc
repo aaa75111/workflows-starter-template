@@ -21,9 +21,9 @@
 	 */
 	"workflows": [
 		{
-			"name": "my-workflow",
-			"binding": "MY_WORKFLOW",
-			"class_name": "MyWorkflow"
+			"name": "shion-av-content-pipeline",
+			"binding": "SHION_WORKFLOW",
+			"class_name": "ShionPipelineWorkflow"
 		}
 	],
 	/**
