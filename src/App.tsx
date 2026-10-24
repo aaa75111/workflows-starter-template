@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { WorkflowDiagram } from "./components/WorkflowDiagram";
 import { CodeDisplay } from "./components/CodeDisplay";
 import { BackgroundDots } from "./components/BackgroundDots";
+import { ShionAvDemo } from "./components/ShionAvDemo";
 import { useWorkflowWebSocket } from "./hooks/useWorkflowWebSocket";
 import { WORKFLOW_STEPS } from "./types";
 
 function App() {
 	const [instanceId, setInstanceId] = useState<string | null>(null);
 	const [isStarting, setIsStarting] = useState(false);
+	const [showAvPreview, setShowAvPreview] = useState(false);
 	const workflowState = useWorkflowWebSocket(instanceId);
 
 	useEffect(() => {
@@ -76,46 +78,62 @@ function App() {
 						</svg>
 						<div className="w-px h-4 bg-neutral-300/50 dark:bg-neutral-600/50" />
 						<h1 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-							Shion AV Content Pipeline
+							Workflows Starter Template
 						</h1>
 					</div>
 
-					<a
-						href="https://developers.cloudflare.com/workflows"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 transition-colors"
-					>
-						Documentation →
-					</a>
+					<div className="flex items-center gap-4">
+						<button
+							onClick={() => setShowAvPreview((v) => !v)}
+							className="text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 transition-colors"
+						>
+							{showAvPreview
+								? "← Back to default demo"
+								: "Shion AV content pipeline (preview) →"}
+						</button>
+						<a
+							href="https://developers.cloudflare.com/workflows"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 transition-colors"
+						>
+							Documentation →
+						</a>
+					</div>
 				</div>
 			</header>
 
-			{/* Main content - unified canvas */}
-			<main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative z-10">
-				{/* Left side - Code (responsive width) */}
-				<div className="w-full lg:w-[60%] overflow-hidden px-6 pb-6">
-					<CodeDisplay
-						currentStep={workflowState.currentStep}
-						workflowStatus={workflowState.workflowStatus}
-						onStartWorkflow={handleStartWorkflow}
-						isStarting={isStarting}
-					/>
-				</div>
+			{showAvPreview ? (
+				<main className="flex-1 overflow-hidden relative z-10">
+					<ShionAvDemo />
+				</main>
+			) : (
+				/* Main content - unified canvas */
+				<main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative z-10">
+					{/* Left side - Code (responsive width) */}
+					<div className="w-full lg:w-[60%] overflow-hidden px-6 pb-6">
+						<CodeDisplay
+							currentStep={workflowState.currentStep}
+							workflowStatus={workflowState.workflowStatus}
+							onStartWorkflow={handleStartWorkflow}
+							isStarting={isStarting}
+						/>
+					</div>
 
-				{/* Right side - Diagram (responsive width) */}
-				<div className="flex-1 overflow-hidden px-6 lg:pl-8 lg:pr-6 pb-6">
-					<WorkflowDiagram
-						steps={WORKFLOW_STEPS}
-						stepStatuses={workflowState.stepStatuses}
-						currentStep={workflowState.currentStep}
-						instanceId={instanceId}
-						workflowStatus={workflowState.workflowStatus}
-						onStartWorkflow={handleStartWorkflow}
-						isStarting={isStarting}
-					/>
-				</div>
-			</main>
+					{/* Right side - Diagram (responsive width) */}
+					<div className="flex-1 overflow-hidden px-6 lg:pl-8 lg:pr-6 pb-6">
+						<WorkflowDiagram
+							steps={WORKFLOW_STEPS}
+							stepStatuses={workflowState.stepStatuses}
+							currentStep={workflowState.currentStep}
+							instanceId={instanceId}
+							workflowStatus={workflowState.workflowStatus}
+							onStartWorkflow={handleStartWorkflow}
+							isStarting={isStarting}
+						/>
+					</div>
+				</main>
+			)}
 		</div>
 	);
 }

@@ -34,10 +34,10 @@ export class WorkflowStatusDO extends DurableObject {
 				this.stepStatuses = new Map(Object.entries(storedStatuses));
 			} else {
 				const steps = [
-					"ingest media",
-					"transcode & normalize",
-					"wait for editorial approval",
-					"publish to channels",
+					"process data",
+					"wait 2 seconds",
+					"wait for approval",
+					"final",
 				];
 				steps.forEach((s) => this.stepStatuses.set(s, "pending"));
 			}
@@ -133,7 +133,7 @@ export class WorkflowStatusDO extends DurableObject {
 	/**
 	 * Get the current state as a message object
 	 */
-	private getStateMessage(): object {
+	getStateMessage() {
 		return {
 			type: "workflow_update",
 			currentStep: this.currentStep,

@@ -33,30 +33,30 @@ export interface WorkflowUpdateMessage {
 	timestamp: number;
 }
 
-// Step definitions for the Shion AV content pipeline workflow
+// Step definitions for the workflow
 export const WORKFLOW_STEPS: StepDefinition[] = [
 	{
-		id: "ingest-media",
-		name: "ingest media",
-		description: "Validate and ingest the uploaded audio/video file",
+		id: "process-data",
+		name: "process data",
+		description: "Break code into durable steps",
 		lineRange: [3, 7],
 	},
 	{
-		id: "transcode",
-		name: "transcode & normalize",
-		description: "Transcode to delivery formats and normalize audio",
+		id: "wait-2-seconds",
+		name: "wait 2 seconds",
+		description: "Add time-based delays",
 		lineRange: [9, 10],
 	},
 	{
 		id: "wait-for-approval",
-		name: "wait for editorial approval",
-		description: "Pause for an editor to review and approve the cut",
+		name: "wait for approval",
+		description: "Pause for external events",
 		lineRange: [12, 16],
 	},
 	{
-		id: "publish",
-		name: "publish to channels",
-		description: "Distribute the approved content to all channels",
+		id: "final",
+		name: "final",
+		description: "Use data from previous steps",
 		lineRange: [18, 22],
 	},
 ];
