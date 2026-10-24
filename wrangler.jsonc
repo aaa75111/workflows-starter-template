@@ -24,6 +24,13 @@
 			"name": "my-workflow",
 			"binding": "MY_WORKFLOW",
 			"class_name": "MyWorkflow"
+		},
+		{
+			// Shion AV content pipeline preview demo - isolated from my-workflow,
+			// see worker/shion-pipeline-workflow.ts.
+			"name": "shion-av-content-pipeline",
+			"binding": "SHION_WORKFLOW",
+			"class_name": "ShionPipelineWorkflow"
 		}
 	],
 	/**
@@ -36,6 +43,12 @@
 			{
 				"name": "WORKFLOW_STATUS",
 				"class_name": "WorkflowStatusDO"
+			},
+			{
+				// Shion AV content pipeline preview demo - isolated from
+				// WORKFLOW_STATUS, see worker/av-durable-object.ts.
+				"name": "AV_WORKFLOW_STATUS",
+				"class_name": "AvWorkflowStatusDO"
 			}
 		]
 	},
@@ -47,6 +60,10 @@
 		{
 			"tag": "v1",
 			"new_sqlite_classes": ["WorkflowStatusDO"]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": ["AvWorkflowStatusDO"]
 		}
 	],
 	"upload_source_maps": true

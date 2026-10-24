@@ -24,7 +24,14 @@ npm ci
 npm run dev
 ```
 
-Visit `http://localhost:5173` to see the interactive demo.
+Visit `http://localhost:5173` to see the interactive demo. Use the "Shion AV
+content pipeline (preview)" link in the header to switch to a second,
+isolated demo workflow (ingest → transcode → editorial approval → publish).
+It's simulated end to end (fixed delays, no real media I/O) and runs on its
+own Workflow binding, Durable Object, and API routes (`/api/av/workflow/*`,
+`/ws/av`) — it never shares instance IDs or state with the default demo
+above, and does not replace the default `MY_WORKFLOW`/`WORKFLOW_STATUS`
+bindings. See `worker/shion-pipeline-workflow.ts` for details.
 
 ### Verification and AI agents
 
