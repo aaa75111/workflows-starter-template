@@ -7,14 +7,14 @@ AV template, agent launchers, or other SHION development features.
 ## Verified locally
 
 Node.js 24, a clean locked install, and `npm run verify`: lint, TypeScript/Vite
-build, 25 Workers-runtime tests, and Wrangler deployment dry-run. Both original
-bindings plus `SHION_WORKFLOW` and `AV_WORKFLOW_STATUS` are packaged. No deploy
-command is run. The existing `undici`/`zod` security overrides in PR #16 are retained.
+build, 27 Workers-runtime tests, and Wrangler deployment dry-run. Both original
+bindings plus `SHION_WORKFLOW` and `AV_WORKFLOW_STATUS` are packaged. These local
+commands do not deploy. The existing `undici`/`zod` security overrides are retained.
 
 The tests include true/false decisions, seven malformed payload shapes, timeout,
 wrong event type, late/duplicate decisions, ingest/publish/notification failures,
 live WebSocket error delivery, reconnect/eviction, retained legacy routing,
-pre-isolation AV snapshot copying and alias routing, mixed-schema refusal,
+pre-isolation AV snapshot preservation and decision quarantine, mixed-schema refusal,
 identical IDs in independent namespaces, and protection against state regression.
 A publish-step tripwire verifies denied decisions never enter that step.
 
@@ -71,16 +71,27 @@ initiate a production deployment, so merge remains gated on the acceptance below
 
 ## Before production promotion
 
+The authorized CLI login has now been restored. Real isolated staging v1/v2
+migrations, generic historical replay and new AV decision checks have run. This
+supersedes the earlier dry-run-only account. The rehearsal also exposed an unsafe
+historical AV replay: false/string decisions still reached its old publish step.
+Those histories are quarantined at both HTTP event routes; they are not silently
+converted, restarted or deleted. Their original `/ws` reads the original DO live;
+the isolated WebSocket refuses these IDs instead of serving a stale copied state.
+See [actual evidence and remaining checks](staging-rehearsal-2026-10-24.md) and the
+[production migration plan](production-migration-plan.md).
+
 - Require GitHub Actions verification and Cloudflare build success for the exact
   proposed commit. A build/version upload alone does not prove active traffic,
   deployed bindings, namespace IDs, or existing-instance compatibility.
 - Inventory both `my-workflow` and `shion-av-content-pipeline` active/waiting
   instances and external callers. Confirm `WORKFLOW_STATUS` still names the
   original namespace and both v1/v2 migration histories match the account.
-- In staging, resume representative pre-PR #6 and PR #6 instances using their
-  original event types and verify checkpoint replay, status APIs, old/new
-  WebSocket protocols, eviction and reconnect. Local tests seed old snapshots;
-  they do not replay an actual pre-upgrade production execution history.
+- In staging, verify generic pre-PR #6 replay and fresh AV decisions against the
+  proposed commit. For PR #6 AV histories, verify decision quarantine preserves
+  the waiting engine and live original snapshot. Automatic AV history recovery
+  has not been accepted. Inventory and prevent direct API/binding event senders
+  from bypassing the HTTP guard; review each existing history before recovery.
 - Keep backups of original snapshots. Do not delete or bulk-restart instances.
   Investigate mixed/unknown data manually. Copying is deliberately non-destructive.
 - Update PR #6 external AV-start clients to `/api/av/workflow/start`. A SHION

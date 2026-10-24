@@ -1,6 +1,7 @@
 import { env, SELF, introspectWorkflowInstance, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { NonRetryableError } from "cloudflare:workflows";
 import { describe, it, expect } from "vitest";
+import { prepareAvStatus } from "../worker/av-compatibility";
 
 const review = "wait for editorial approval";
 const publish = "publish to channels";
@@ -216,16 +217,22 @@ async function seedPr6Snapshot(id: string, status = "completed") {
 }
 
 describe("legacy and pre-isolation compatibility", () => {
-	it("reads an old AV snapshot through both WebSocket protocols without deleting the source", async () => {
+	it("preserves old AV snapshots and reads their live original WebSocket without using a stale copy", async () => {
 		const id = crypto.randomUUID();
-		const original = await seedPr6Snapshot(id);
-		expect(await socketSnapshot(id)).toMatchObject({ type: "av_workflow_update", workflowStatus: "completed", stepStatuses: original });
-		await evictDurableObject(stubFor(id));
-		expect(await socketSnapshot(id, "/ws")).toMatchObject({ type: "workflow_update", workflowStatus: "completed", stepStatuses: original });
+		const original = await seedPr6Snapshot(id, "pending");
+		await prepareAvStatus(env, id);
+		expect(await stubFor(id).getStateMessage()).toMatchObject({ workflowStatus: "running", stepStatuses: original });
 		expect((await oldStubFor(id).getStateMessage()).stepStatuses).toEqual(original);
+		// The old engine can keep updating its original DO after the copy.
+		await oldStubFor(id).updateStep("ingest media", "completed");
+		expect(await socketSnapshot(id, "/ws")).toMatchObject({ type: "workflow_update", workflowStatus: "running", stepStatuses: { ...original, "ingest media": "completed" } });
+		expect((await stubFor(id).getStateMessage()).stepStatuses).toEqual(original);
+		const response = await SELF.fetch(`https://test/ws/av?instanceId=${id}`, { headers: { Upgrade: "websocket" } });
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({ code: "LEGACY_INSTANCE_REQUIRES_REVIEW" });
 	});
 
-	it("routes old PR #6 status and rejection calls to SHION and preserves the old WebSocket envelope", async () => {
+	it.each([{ approved: true }, { approved: false }, { approved: "true" }])("blocks legacy AV decisions on both event routes without stopping or changing the instance: %j", async (decision) => {
 		const id = crypto.randomUUID();
 		const original = await seedPr6Snapshot(id, "pending");
 		await using instance = await introspectWorkflowInstance(env.SHION_WORKFLOW, id);
@@ -236,14 +243,17 @@ describe("legacy and pre-isolation compatibility", () => {
 		});
 		await env.SHION_WORKFLOW.create({ id });
 		await instance.waitForStepResult({ name: `notify ${review}: waiting` });
-		const response = await SELF.fetch(`https://test/api/workflow/event/${id}`, {
-			method: "POST", body: JSON.stringify({ approved: false }),
-		});
-		expect(response.ok).toBe(true);
-		await instance.waitForStatus("errored");
-		expect(await (await SELF.fetch(`https://test/api/workflow/status/${id}`)).json()).toMatchObject({ status: "errored" });
-		expect(await socketSnapshot(id, "/ws")).toMatchObject({ type: "workflow_update", workflowStatus: "error", stepStatuses: { [publish]: "error" }, errorMessage: "APPROVAL_REJECTED" });
-		expect(await socketSnapshot(id)).toMatchObject({ workflowStatus: "rejected" });
+		for (const route of ["/api/workflow/event/", "/api/av/workflow/event/"]) {
+			const response = await SELF.fetch(`https://test${route}${id}`, {
+				method: "POST", body: JSON.stringify(decision),
+			});
+			expect(response.status).toBe(409);
+			expect(await response.json()).toMatchObject({ code: "LEGACY_INSTANCE_REQUIRES_REVIEW" });
+		}
+		const status = await (await env.SHION_WORKFLOW.get(id)).status();
+		expect(["running", "waiting"]).toContain(status.status);
+		expect((await stubFor(id).getStateMessage()).stepStatuses[publish]).toBe("pending");
+		expect(await (await SELF.fetch(`https://test/api/workflow/status/${id}`)).json()).toMatchObject({ status: status.status });
 		expect((await oldStubFor(id).getStateMessage()).stepStatuses).toEqual(original);
 	});
 
@@ -290,7 +300,8 @@ describe("legacy and pre-isolation compatibility", () => {
 		await stub.markError("APPROVAL_REJECTED", review);
 		await seedPr6Snapshot(id);
 		await evictDurableObject(stub);
-		expect(await socketSnapshot(id)).toMatchObject({ workflowStatus: "rejected", errorMessage: "APPROVAL_REJECTED" });
+		await prepareAvStatus(env, id);
+		expect(await stub.getStateMessage()).toMatchObject({ workflowStatus: "rejected", errorMessage: "APPROVAL_REJECTED" });
 		await runInDurableObject(stub, async (object) => {
 			await expect(object.updateStep(publish, "running")).rejects.toThrow("already stopped");
 		});

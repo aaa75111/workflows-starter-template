@@ -104,15 +104,20 @@ failure stops the pipeline instead of silently continuing to publish.
 | `WORKFLOW_STATUS`, `WorkflowStatusDO`, migration `v1` | Original namespace and data retained |
 | `/api/workflow/start` | Original generic demo; new AV callers use `/api/av/workflow/start` |
 | Generic old status/event IDs and `/ws` | Original routing and `workflow_update` messages |
-| PR #6 AV IDs in old status/event routes and `/ws` | Recognized by their stored four AV steps, routed to SHION; old WebSocket envelope retained |
+| PR #6 AV IDs in old status routes | Recognized by their stored four AV steps and inspected through SHION |
+| PR #6 AV decisions on either event route | 409 `LEGACY_INSTANCE_REQUIRES_REVIEW`; no event forwarded, instance retained |
+| PR #6 AV IDs on `/ws` | Live original DO and `workflow_update` envelope; `/ws/av` refuses these IDs with 409 |
 | `/api/av/workflow/*`, `/ws/av` | Isolated AV workflow/status namespace and `av_workflow_update` messages |
-| PR #6 AV snapshots | Copied once to the isolated namespace; source is retained and newer target state is never overwritten |
+| PR #6 AV snapshot import | Non-destructive one-time copy; never presented as the live state of an old engine |
 | Mixed or unknown AV snapshots | Refused for manual review; never silently converted or deleted |
 
 Instances created directly through the SHION binding without an old snapshot
 must use the explicit AV routes. Existing external AV start callers from PR #6
-must change to `/api/av/workflow/start`. A stored snapshot compatibility test is
-not a production replay test of an already deployed Workflow version.
+must change to `/api/av/workflow/start`. Cloud staging replay found that historical
+AV runs could still publish after a false or malformed decision after deployment.
+Their decisions are therefore blocked pending a reviewed recovery plan. A snapshot
+copy does not upgrade an execution history. Direct binding/API event senders must
+also be inventoried before release. See the [cloud rehearsal](docs/staging-rehearsal-2026-10-24.md).
 
 All ingest, transcode and publish operations remain simulated. See
 [deployment acceptance](docs/deployment-acceptance.md) for the remaining

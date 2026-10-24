@@ -28,11 +28,12 @@ export default {
 		// Route only recognizable AV snapshots; leave genuine legacy IDs alone.
 		const oldApi = /^\/api\/workflow\/(status|event)\/([^/]+)$/.exec(url.pathname);
 		const oldId = oldApi?.[2] ?? (url.pathname === "/ws" ? url.searchParams.get("instanceId") : null);
+		let legacyAv = false;
 		if (oldId) {
 			try {
-				if (await readLegacyAvSnapshot(env, oldId)) {
-					url.pathname = oldApi ? url.pathname.replace("/api/workflow/", "/api/av/workflow/") : "/ws/av";
-					url.searchParams.set("legacyProtocol", "1");
+				legacyAv = Boolean(await readLegacyAvSnapshot(env, oldId));
+				if (legacyAv && oldApi) {
+					url.pathname = url.pathname.replace("/api/workflow/", "/api/av/workflow/");
 				}
 			} catch {
 				return Response.json({ error: "Stored workflow state requires review" }, { status: 409 });
@@ -210,6 +211,15 @@ export default {
 			}
 
 			try {
+				// Cloud replay of pre-isolation histories still reached PR #6's
+				// publish step for rejected or malformed events after deployment.
+				// Preserve those instances and require an explicit recovery plan.
+				if (legacyAv || await readLegacyAvSnapshot(env, instanceId)) {
+					return Response.json({
+						error: "Legacy AV instance requires manual review before any decision",
+						code: "LEGACY_INSTANCE_REQUIRES_REVIEW",
+					}, { status: 409 });
+				}
 				const body: unknown = await request.json();
 				await prepareAvStatus(env, instanceId);
 				const instance = await env.SHION_WORKFLOW.get(instanceId);
@@ -250,6 +260,15 @@ export default {
 			}
 
 			try {
+				// Old instances continue notifying WORKFLOW_STATUS. A one-time copy
+				// cannot be presented as their live isolated state. Their original
+				// /ws connection above continues reading the original DO directly.
+				if (await readLegacyAvSnapshot(env, instanceId)) {
+					return Response.json({
+						error: "Use the original WebSocket to inspect this legacy AV instance",
+						code: "LEGACY_INSTANCE_REQUIRES_REVIEW",
+					}, { status: 409 });
+				}
 				const stub = await prepareAvStatus(env, instanceId);
 				return stub.fetch(new Request(url, request));
 			} catch {

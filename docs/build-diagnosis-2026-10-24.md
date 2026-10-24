@@ -2,6 +2,12 @@
 
 ## Evidence inspected
 
+The initial failure diagnosis below remains valid. The authorized continuation
+restored CLI login, inventoried production, backed up its application snapshot,
+and actually applied v1/v2 to a private staging Worker. Cloud replay then exposed
+a separate historical AV decision hazard, requiring quarantine. See the
+[staging evidence](staging-rehearsal-2026-10-24.md) for current acceptance scope.
+
 - PR #16: open, non-draft, mergeable; inspected head
   `f97cab03e7481d84d1305d25ed559ec37cd2b071` on
   `claude/shion-av-pipeline-isolated`.
@@ -44,7 +50,9 @@ The production deployment view showed active version prefix `5a3defac` (main/PR
 #17), not PR #16. Worker settings showed `WORKFLOW_STATUS` pointing to
 `workflows-starter-template_WorkflowStatusDO` and `SHION_WORKFLOW` pointing to
 `shion-av-content-pipeline`; the proposed `AV_WORKFLOW_STATUS` was not present.
-No exact DO namespace UUID, stored snapshots or remote migration tag were exported.
+This was the initial browser-only inspection. The subsequent authorized API/RPC
+inventory obtained the exact namespace UUID, runtime migration tag and application
+snapshot backup, documented in the staging evidence linked above.
 
 The account's Workflows list contained `my-workflow` and
 `shion-av-content-pipeline`, both displaying zero current inactive/running/ended/
@@ -66,9 +74,10 @@ actual output and reject production targets, shared Workflow/DO resources,
 public routes and destructive migration changes. Existing application code,
 approval gates, original v1/v2 history and undici/zod overrides are retained.
 
-This preparatory repair does not claim that a remote migration was performed.
-Record actual staging deployment/version IDs, namespace UUIDs, migration history
-and event/replay evidence before production promotion. For an existing Worker,
+The staging continuation has now performed a remote migration, but production
+still has its pending v2 migration. Review exact staging deployment/version IDs,
+namespace UUIDs, history and event/replay evidence before production promotion.
+For an existing Worker,
 keep a forward-repair plan: adding a DO class can restrict rollback across the
 migration, so an old Worker version alone is not a complete rollback plan.
 
@@ -93,12 +102,17 @@ With Node.js 24.19.0 and the committed dependency graph:
 - `git diff --check` passed. Application workflow/approval code and the locked
   undici/zod security overrides were not changed.
 
-The development checkout's `wrangler whoami` reported no authenticated account.
-The authorized browser session provided dashboard evidence, not a transferable
-CLI credential. No real staging or production deployment, migration, snapshot
-backup or historical replay was performed in these checks. Do not substitute a
-temporary Cloudflare account, extract browser credentials, or mark the original
-Cloudflare deployment failure as resolved based on these dry-runs.
+At the initial inspection the CLI was unauthenticated. The subsequent continuation
+used the original authorized device's normal Wrangler OAuth flow with the same
+scopes; no browser credentials were extracted. Real staging deployment, migration,
+snapshot backup and historical replay have since run. No production migration or
+deployment has run. The original production-target version-upload failure remains
+unresolved until an independently approved migration deployment applies v2.
+
+On `4d69dfe`, Actions run `40099589268`, Bugbot and the security-agent execution
+completed successfully; the approval agent submitted an APPROVED review for that
+exact head. This supersedes the older incomplete review on `f97cab03`. Any later
+correction still requires checks and complete review for its own exact commit.
 
 See [deployment acceptance](deployment-acceptance.md) for the remaining gates.
 
