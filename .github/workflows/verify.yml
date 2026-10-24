@@ -35,3 +35,5 @@ jobs:
         run: npm audit --audit-level=low
       - name: Lint, build, test, and check Worker packaging
         run: npm run verify
+      - name: Check isolated staging target without deploying
+        run: npm run check:staging

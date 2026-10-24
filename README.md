@@ -68,6 +68,13 @@ branch before Dependabot can reassess the repository's open alerts.
 
 ### Deployment
 
+PR #16 introduces a pending Durable Object migration. Read
+[deployment acceptance](docs/deployment-acceptance.md) before promoting it.
+For an isolated, non-deploying rehearsal run `npm run check:staging`. The
+separate `npm run deploy:staging` command requires an explicitly selected
+authorized account and keeps public URLs disabled. `npm run deploy` below
+targets production; it is not a workaround for a failing PR version upload.
+
 ```bash
 npm run deploy
 ```

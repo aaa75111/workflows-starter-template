@@ -66,5 +66,32 @@
 			"new_sqlite_classes": ["AvWorkflowStatusDO"]
 		}
 	],
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"env": {
+		"staging": {
+			"name": "workflows-starter-template-staging",
+			// Keep this migration rehearsal off public URLs and production routes.
+			"workers_dev": false,
+			"preview_urls": false,
+			"routes": [],
+			"workflows": [
+				{
+					"name": "my-workflow-staging",
+					"binding": "MY_WORKFLOW",
+					"class_name": "MyWorkflow"
+				},
+				{
+					"name": "shion-av-content-pipeline-staging",
+					"binding": "SHION_WORKFLOW",
+					"class_name": "ShionPipelineWorkflow"
+				}
+			],
+			"durable_objects": {
+				"bindings": [
+					{ "name": "WORKFLOW_STATUS", "class_name": "WorkflowStatusDO" },
+					{ "name": "AV_WORKFLOW_STATUS", "class_name": "AvWorkflowStatusDO" }
+				]
+			}
+		}
+	}
 }
