@@ -51,6 +51,8 @@ The deployed version API confirms migration tag `v2` and all four bindings.
 Original staging status namespace: `fb67d9436d644c1494c4ea4203edab00`.
 New staging AV namespace: `97d40d9d500d4ebaa7588732c28f6e35`.
 Both are independent of production's namespace.
+The original staging namespace UUID also matches the historical generic v1
+version API response, establishing that the additive v2 retained that namespace.
 
 HTTP and WebSocket requests used a loopback-only Wrangler service-binding proxy
 to the actual deployed staging Worker. Workflow engine logs/status came from the
@@ -87,14 +89,53 @@ the one-time imported copy as current state. Generic old routing is unchanged.
 Local verification of this correction passes 27 Workers tests, including all
 three decisions on both routes, preservation of a waiting instance and live
 original-WebSocket updates after a copy. The ten staging guards and both Wrangler
-dry-runs also pass. Remote quarantine verification and exact corrected-head CI /
-review results must be recorded in the PR before release; the earlier `4d69dfe`
-approval does not cover this correction.
+dry-runs also pass.
+
+## Corrected-head cloud verification
+
+Exact application head `a6804a05d9294c34681f5eb2c0ec97d67417c197` was deployed
+with the guarded staging command as Worker version
+`9f791278-a47c-4953-8878-c4caed8852ac`. To create still-waiting historical engines,
+the original AV fixture was deployed once more while retaining both DO exports,
+both namespace bindings and v1/v2 history (version
+`000839b9-b889-4949-94ce-d382a69e4c9d`); the correction was then redeployed. No
+migration was removed or reversed. The private service proxy was restarted for
+the corrected deployment.
+
+| Corrected-head case | Actual instance | Observed result |
+| --- | --- | --- |
+| Historical AV, true | `e8da2114-7b5b-43ac-a7f8-7d6c827203ee` | Both event routes 409; engine waiting; original snapshot unchanged; no publish checkpoint |
+| Historical AV, false | `e61a9cfc-ce51-475c-90d4-cc17bfe0ae38` | Both event routes 409; engine waiting; original snapshot unchanged; no publish checkpoint |
+| Historical AV, string | `74fc64cd-97a0-4484-9da8-a3ae69260474` | Both event routes 409; engine waiting; original snapshot unchanged; no publish checkpoint |
+| New AV, true | `651c62ac-1c15-4aed-b707-e8f44f5ce240` | Engine complete; durable status completed; simulated publish checkpoint present |
+| New AV, false | `388e5bbe-2789-4c3a-bad6-829ba2f9783c` | Engine errored `APPROVAL_REJECTED`; durable status rejected; no publish checkpoint |
+| New AV, string | `7a0a8b2a-f855-4df4-a218-ac2e4559f863` | Engine errored `INVALID_APPROVAL`; durable status error; no publish checkpoint |
+
+All three quarantined histories retained their original `/ws` state and envelope;
+`/ws/av` returned 409 for each. The original generic instance still reported
+complete through the engine and original WebSocket. Production remained on
+version `5a3defac` at 100%. The remote assertion process exited zero at
+14:49:58Z; results are saved as `a680-quarantine-results.json` and
+`a680-new-av-results.json` in the authorized evidence directory.
+
+[Actions run 40103656718](https://github.com/aaa75111/workflows-starter-template/actions/runs/40103656718)
+passed audit (zero vulnerabilities), 27 Workers tests, ten staging guards and both
+dry-runs for `a6804a05`. Bugbot completed on that head with no findings. Security
+and approval-agent execution checks succeeded, but the submitted APPROVED review
+still referenced `4d69dfe` at this inspection; do not present it as a submitted
+approval of `a6804a05` or a production release approval.
+
+The production-target Cloudflare check for `a6804a05` still failed (build
+`a4fde5da-53cd-4db5-b19f-2e78c81c1e11`). The original CLI OAuth scopes returned
+403 for its Builds logs and the browser connection was unavailable; this latest
+run's precise error was not read. The pending production v2 migration remains
+confirmed by the prior authenticated build logs and current production v1 tag,
+but that does not prove no additional error occurred in this newest build.
 
 Remaining gates: collect the real timeout outcome and durable WebSocket state;
-verify corrected-head quarantine on still-waiting historical engines and new AV
-decisions; review direct binding/API event callers and a per-history recovery
-plan; perform a complete latest-head review; approve and execute the separate
+review direct binding/API event callers and a per-history recovery plan; obtain
+latest-head release review/approval and the latest Builds error evidence; approve
+and execute the separate
 production migration plan. Cloud DO eviction cannot be asserted from closing a
 WebSocket or waiting briefly; forced eviction/recovery remains local-test evidence
 unless explicitly observed in the actual environment.
