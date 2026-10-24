@@ -77,3 +77,36 @@ npm run deploy
 - [Cloudflare Workflows Documentation](https://developers.cloudflare.com/workflows)
 - [Durable Objects Documentation](https://developers.cloudflare.com/durable-objects)
 - [Workers Documentation](https://developers.cloudflare.com/workers)
+
+## Editorial safety and existing instances
+
+The AV demo accepts only an object containing the boolean `approved: true`
+(and a string `comment`, when provided). Rejection ends the Workflow engine in
+`errored` with `APPROVAL_REJECTED` and the AV WebSocket in `rejected`. Invalid
+payloads, review timeouts and other failures end in `error`. No such outcome
+executes `publish to channels`. Invalid HTTP JSON is rejected with 400 before an
+event is sent; the pending workflow remains subject to its normal review timeout.
+
+The first matching event is final. Late decisions return 409 for a terminated
+instance. Progress and terminal snapshots are persisted atomically; notification
+failure stops the pipeline instead of silently continuing to publish.
+
+| Existing interface | Behavior after this repair |
+| --- | --- |
+| `MY_WORKFLOW`, `my-workflow`, `MyWorkflow` | Original demo identity retained |
+| `WORKFLOW_STATUS`, `WorkflowStatusDO`, migration `v1` | Original namespace and data retained |
+| `/api/workflow/start` | Original generic demo; new AV callers use `/api/av/workflow/start` |
+| Generic old status/event IDs and `/ws` | Original routing and `workflow_update` messages |
+| PR #6 AV IDs in old status/event routes and `/ws` | Recognized by their stored four AV steps, routed to SHION; old WebSocket envelope retained |
+| `/api/av/workflow/*`, `/ws/av` | Isolated AV workflow/status namespace and `av_workflow_update` messages |
+| PR #6 AV snapshots | Copied once to the isolated namespace; source is retained and newer target state is never overwritten |
+| Mixed or unknown AV snapshots | Refused for manual review; never silently converted or deleted |
+
+Instances created directly through the SHION binding without an old snapshot
+must use the explicit AV routes. Existing external AV start callers from PR #6
+must change to `/api/av/workflow/start`. A stored snapshot compatibility test is
+not a production replay test of an already deployed Workflow version.
+
+All ingest, transcode and publish operations remain simulated. See
+[deployment acceptance](docs/deployment-acceptance.md) for the remaining
+production and real-media checks.

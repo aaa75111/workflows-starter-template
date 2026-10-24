@@ -27,7 +27,8 @@ export type AvStepStatus =
 	| "running"
 	| "waiting"
 	| "completed"
-	| "rejected";
+	| "rejected"
+	| "error";
 export type AvOverallStatus =
 	| "idle"
 	| "running"

@@ -1,6 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
+import { isLegacyAvSnapshot } from "./av-compatibility";
+import type { LegacyAvSnapshot } from "./av-compatibility";
 
-type AvStepStatus = "pending" | "running" | "waiting" | "completed" | "rejected";
+type AvStepStatus = "pending" | "running" | "waiting" | "completed" | "rejected" | "error";
 type AvWorkflowStatus = "running" | "completed" | "rejected" | "error";
 
 /**
@@ -21,6 +23,7 @@ export class AvWorkflowStatusDO extends DurableObject {
 	private currentStep: string | null;
 	private workflowStatus: AvWorkflowStatus;
 	private errorMessage: string | null;
+	private hasStoredState = false;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -41,6 +44,7 @@ export class AvWorkflowStatusDO extends DurableObject {
 				await ctx.storage.get<string | null>("errorMessage");
 
 			if (storedStatuses) {
+				this.hasStoredState = true;
 				this.stepStatuses = new Map(Object.entries(storedStatuses));
 			} else {
 				const steps = [
@@ -58,16 +62,27 @@ export class AvWorkflowStatusDO extends DurableObject {
 		});
 	}
 
+	// Copy recognized PR #6 snapshots once. Never change the original namespace
+	// or overwrite newer isolated state, including a rejected/errored decision.
+	async importLegacySnapshot(snapshot: LegacyAvSnapshot): Promise<void> {
+		if (this.hasStoredState || !isLegacyAvSnapshot(snapshot)) return;
+		this.stepStatuses = new Map(Object.entries(snapshot.stepStatuses));
+		this.currentStep = snapshot.currentStep;
+		this.workflowStatus = snapshot.workflowStatus;
+		await this.persistAndBroadcast();
+	}
+
 	async fetch(request: Request): Promise<Response> {
 		if (request.headers.get("Upgrade") === "websocket") {
 			const pair = new WebSocketPair();
 			const [client, server] = Object.values(pair);
 
 			// Use hibernation API - acceptWebSocket allows the DO to hibernate
-			this.ctx.acceptWebSocket(server);
+			const legacy = new URL(request.url).searchParams.get("legacyProtocol") === "1";
+			this.ctx.acceptWebSocket(server, legacy ? ["legacy"] : []);
 
 			// Send current state immediately upon connection
-			server.send(JSON.stringify(this.getStateMessage()));
+			server.send(JSON.stringify(this.getStateMessage(legacy)));
 
 			return new Response(null, { status: 101, webSocket: client });
 		}
@@ -81,6 +96,9 @@ export class AvWorkflowStatusDO extends DurableObject {
 	 * last step marks the whole workflow completed.
 	 */
 	async updateStep(stepName: string, status: AvStepStatus): Promise<void> {
+		if (!this.stepStatuses.has(stepName)) throw new Error("Unknown AV step");
+		if (this.workflowStatus === "rejected" || this.workflowStatus === "error") throw new Error("AV workflow already stopped");
+		if (this.workflowStatus === "completed" || this.stepStatuses.get(stepName) === "completed") return;
 		this.stepStatuses.set(stepName, status);
 
 		if (status === "running" || status === "waiting") {
@@ -105,11 +123,15 @@ export class AvWorkflowStatusDO extends DurableObject {
 
 	/**
 	 * RPC method called by the workflow when it errors (e.g. an approval
-	 * timeout or an exhausted step retry). Sets the overall workflow status
-	 * without attributing the failure to a specific step.
+	 * timeout or an exhausted step retry). Persists the failed step and outcome
+	 * atomically; editorial rejection remains distinguishable from other errors.
 	 */
-	async markError(message?: string): Promise<void> {
-		this.workflowStatus = "error";
+	async markError(message?: string, stepName?: string): Promise<void> {
+		if (this.workflowStatus === "rejected" || this.workflowStatus === "error") return;
+		const rejected = message === "APPROVAL_REJECTED";
+		this.workflowStatus = rejected ? "rejected" : "error";
+		if (stepName && this.stepStatuses.has(stepName)) this.stepStatuses.set(stepName, rejected ? "rejected" : "error");
+		if (rejected) this.stepStatuses.set("publish to channels", "rejected");
 		this.errorMessage = message ?? null;
 		this.currentStep = null;
 
@@ -121,7 +143,7 @@ export class AvWorkflowStatusDO extends DurableObject {
 	 * Called when a client sends a message
 	 */
 	async webSocketMessage(ws: WebSocket, _message: string): Promise<void> {
-		ws.send(JSON.stringify(this.getStateMessage()));
+		ws.send(JSON.stringify(this.getStateMessage(this.ctx.getTags(ws).includes("legacy"))));
 	}
 
 	/**
@@ -138,27 +160,25 @@ export class AvWorkflowStatusDO extends DurableObject {
 	}
 
 	private async persistAndBroadcast(): Promise<void> {
-		await this.ctx.storage.put(
-			"stepStatuses",
-			Object.fromEntries(this.stepStatuses),
-		);
-		await this.ctx.storage.put("currentStep", this.currentStep);
-		await this.ctx.storage.put("workflowStatus", this.workflowStatus);
-		await this.ctx.storage.put("errorMessage", this.errorMessage);
-
-		this.broadcast(this.getStateMessage());
+		await this.ctx.storage.put({
+			stepStatuses: Object.fromEntries(this.stepStatuses),
+			currentStep: this.currentStep,
+			workflowStatus: this.workflowStatus,
+			errorMessage: this.errorMessage,
+		});
+		this.hasStoredState = true;
+		this.broadcast();
 	}
 
 	/**
 	 * Broadcast a message to all connected WebSocket clients
 	 */
-	private broadcast(message: object): void {
+	private broadcast(): void {
 		const sockets = this.ctx.getWebSockets();
-		const json = JSON.stringify(message);
 
 		for (const socket of sockets) {
 			try {
-				socket.send(json);
+				socket.send(JSON.stringify(this.getStateMessage(this.ctx.getTags(socket).includes("legacy"))));
 			} catch {
 				// Ignore errors for disconnected sockets
 			}
@@ -168,12 +188,12 @@ export class AvWorkflowStatusDO extends DurableObject {
 	/**
 	 * Get the current state as a message object
 	 */
-	private getStateMessage(): object {
+	getStateMessage(legacy = false) {
 		return {
-			type: "av_workflow_update",
+			type: legacy ? "workflow_update" : "av_workflow_update",
 			currentStep: this.currentStep,
-			stepStatuses: Object.fromEntries(this.stepStatuses),
-			workflowStatus: this.workflowStatus,
+			stepStatuses: Object.fromEntries([...this.stepStatuses].map(([key, value]) => [key, legacy && value === "rejected" ? "error" : value])),
+			workflowStatus: legacy && this.workflowStatus === "rejected" ? "error" : this.workflowStatus,
 			errorMessage: this.errorMessage,
 			timestamp: Date.now(),
 		};

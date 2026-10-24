@@ -20,6 +20,7 @@ const STEP_DESCRIPTIONS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<AvStepStatus, string> = {
+	error: "bg-red-500/10 text-red-700 dark:text-red-400",
 	pending:
 		"bg-neutral-500/10 dark:bg-neutral-500/20 text-neutral-600 dark:text-neutral-300",
 	running:

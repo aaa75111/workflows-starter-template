@@ -1,3 +1,5 @@
+import { prepareAvStatus, readLegacyAvSnapshot } from "./av-compatibility";
+
 // Export the Workflow and Durable Object classes
 export { MyWorkflow } from "./workflow";
 export { WorkflowStatusDO } from "./durable-object";
@@ -22,6 +24,20 @@ export { AvWorkflowStatusDO } from "./av-durable-object";
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
+		// PR #6 used the default endpoints and status namespace for AV IDs.
+		// Route only recognizable AV snapshots; leave genuine legacy IDs alone.
+		const oldApi = /^\/api\/workflow\/(status|event)\/([^/]+)$/.exec(url.pathname);
+		const oldId = oldApi?.[2] ?? (url.pathname === "/ws" ? url.searchParams.get("instanceId") : null);
+		if (oldId) {
+			try {
+				if (await readLegacyAvSnapshot(env, oldId)) {
+					url.pathname = oldApi ? url.pathname.replace("/api/workflow/", "/api/av/workflow/") : "/ws/av";
+					url.searchParams.set("legacyProtocol", "1");
+				}
+			} catch {
+				return Response.json({ error: "Stored workflow state requires review" }, { status: 409 });
+			}
+		}
 
 		// API: Start a new workflow instance
 		if (url.pathname === "/api/workflow/start" && request.method === "POST") {
@@ -194,12 +210,14 @@ export default {
 			}
 
 			try {
-				const body = (await request.json()) as {
-					approved: boolean;
-					comment?: string;
-				};
+				const body: unknown = await request.json();
+				await prepareAvStatus(env, instanceId);
 				const instance = await env.SHION_WORKFLOW.get(instanceId);
 
+				const state = await instance.status();
+				if (["complete", "errored", "terminated"].includes(state.status)) {
+					return Response.json({ error: "Workflow is already stopped" }, { status: 409 });
+				}
 				await instance.sendEvent({
 					type: "editorial-approval",
 					payload: body,
@@ -209,10 +227,10 @@ export default {
 					success: true,
 					message: "Event sent successfully",
 				});
-			} catch {
+			} catch (error) {
 				return Response.json(
 					{ error: "Failed to send event" },
-					{ status: 500 },
+					{ status: error instanceof SyntaxError ? 400 : 500 },
 				);
 			}
 		}
@@ -232,9 +250,8 @@ export default {
 			}
 
 			try {
-				const doId = env.AV_WORKFLOW_STATUS.idFromName(instanceId);
-				const stub = env.AV_WORKFLOW_STATUS.get(doId);
-				return stub.fetch(request);
+				const stub = await prepareAvStatus(env, instanceId);
+				return stub.fetch(new Request(url, request));
 			} catch {
 				return new Response("Failed to establish WebSocket connection", {
 					status: 500,

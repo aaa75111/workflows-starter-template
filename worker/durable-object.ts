@@ -133,7 +133,7 @@ export class WorkflowStatusDO extends DurableObject {
 	/**
 	 * Get the current state as a message object
 	 */
-	private getStateMessage(): object {
+	getStateMessage() {
 		return {
 			type: "workflow_update",
 			currentStep: this.currentStep,
