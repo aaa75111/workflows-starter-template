@@ -40,6 +40,12 @@
 		"wrangler": "4.152.0"
 	},
 	"private": true,
+	"overrides": {
+		"miniflare": {
+			"undici": "7.30.1"
+		},
+		"zod": "4.6.6"
+	},
 	"scripts": {
 		"build": "tsc -b && vite build",
 		"cf-typegen": "wrangler types",
