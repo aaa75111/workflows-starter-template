@@ -18,7 +18,7 @@ function App() {
 		) {
 			const timer = setTimeout(() => {
 				setInstanceId(null);
-			}, workflowState.workflowStatus === "completed" ? 1500 : 2500);
+			}, 2500);
 			return () => clearTimeout(timer);
 		}
 	}, [workflowState.workflowStatus]);
