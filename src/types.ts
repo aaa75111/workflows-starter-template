@@ -7,8 +7,14 @@ export type StepStatus =
 	| "running"
 	| "waiting"
 	| "completed"
+	| "rejected"
 	| "error";
-export type WorkflowStatus = "idle" | "running" | "completed" | "error";
+export type WorkflowStatus =
+	| "idle"
+	| "running"
+	| "completed"
+	| "rejected"
+	| "error";
 
 export interface StepDefinition {
 	id: string;
@@ -22,6 +28,7 @@ export interface WorkflowState {
 	currentStep: string | null;
 	stepStatuses: Record<string, StepStatus>;
 	workflowStatus: WorkflowStatus;
+	errorMessage: string | null;
 	wsConnected: boolean;
 }
 
@@ -29,7 +36,8 @@ export interface WorkflowUpdateMessage {
 	type: "workflow_update";
 	currentStep: string | null;
 	stepStatuses: Record<string, StepStatus>;
-	workflowStatus: "running" | "completed" | "error";
+	workflowStatus: "running" | "completed" | "rejected" | "error";
+	errorMessage?: string | null;
 	timestamp: number;
 }
 
@@ -51,12 +59,12 @@ export const WORKFLOW_STEPS: StepDefinition[] = [
 		id: "wait-for-approval",
 		name: "wait for editorial approval",
 		description: "Pause for an editor to review and approve the cut",
-		lineRange: [12, 16],
+		lineRange: [12, 20],
 	},
 	{
 		id: "publish",
 		name: "publish to channels",
 		description: "Distribute the approved content to all channels",
-		lineRange: [18, 22],
+		lineRange: [22, 25],
 	},
 ];

@@ -11,10 +11,14 @@ function App() {
 	const workflowState = useWorkflowWebSocket(instanceId);
 
 	useEffect(() => {
-		if (workflowState.workflowStatus === "completed") {
+		if (
+			workflowState.workflowStatus === "completed" ||
+			workflowState.workflowStatus === "rejected" ||
+			workflowState.workflowStatus === "error"
+		) {
 			const timer = setTimeout(() => {
 				setInstanceId(null);
-			}, 1500);
+			}, workflowState.workflowStatus === "completed" ? 1500 : 2500);
 			return () => clearTimeout(timer);
 		}
 	}, [workflowState.workflowStatus]);
@@ -111,6 +115,7 @@ function App() {
 						currentStep={workflowState.currentStep}
 						instanceId={instanceId}
 						workflowStatus={workflowState.workflowStatus}
+						errorMessage={workflowState.errorMessage}
 						onStartWorkflow={handleStartWorkflow}
 						isStarting={isStarting}
 					/>

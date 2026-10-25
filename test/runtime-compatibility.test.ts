@@ -77,6 +77,52 @@ describe("Cloudflare dependency compatibility", () => {
 		}
 	});
 
+	it("rejects non-boolean approval payloads before they reach the workflow", async () => {
+		const id = crypto.randomUUID();
+		await using instance = await introspectWorkflowInstance(env.SHION_WORKFLOW, id);
+		await instance.modify(async (m) => {
+			await m.disableSleeps();
+		});
+		await env.SHION_WORKFLOW.create({ id });
+		await instance.waitForStepResult({ name: "ingest media" });
+
+		const invalid = await SELF.fetch(`https://test/api/workflow/event/${id}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ approved: "true" }),
+		});
+		expect(invalid.status).toBe(400);
+		expect(await invalid.json()).toMatchObject({
+			error: "approved must be a boolean",
+		});
+
+		const rejected = await SELF.fetch(`https://test/api/workflow/event/${id}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ approved: false }),
+		});
+		expect(rejected.status).toBe(200);
+		await instance.waitForStatus("errored");
+
+		const { socket, initial } = await connectStatus(id);
+		try {
+			expect(JSON.parse((await initial).data as string)).toMatchObject({
+				type: "workflow_update",
+				currentStep: null,
+				workflowStatus: "rejected",
+				errorMessage: "APPROVAL_REJECTED",
+				stepStatuses: {
+					"ingest media": "completed",
+					"transcode & normalize": "completed",
+					"wait for editorial approval": "rejected",
+					"publish to channels": "rejected",
+				},
+			});
+		} finally {
+			await closeSocket(socket);
+		}
+	});
+
 	it("broadcasts Durable Object updates and restores the persisted state after eviction", async () => {
 		const id = crypto.randomUUID();
 		const stub = env.WORKFLOW_STATUS.get(env.WORKFLOW_STATUS.idFromName(id));
