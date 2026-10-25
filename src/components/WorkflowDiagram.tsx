@@ -11,7 +11,8 @@ interface WorkflowDiagramProps {
 	stepStatuses: Record<string, StepStatus>;
 	currentStep: string | null;
 	instanceId: string | null;
-	workflowStatus: "idle" | "running" | "completed" | "error";
+	workflowStatus: "idle" | "running" | "completed" | "rejected" | "error";
+	errorMessage?: string | null;
 	onStartWorkflow: () => void;
 	isStarting: boolean;
 }
@@ -27,6 +28,7 @@ export function WorkflowDiagram({
 	currentStep,
 	instanceId,
 	workflowStatus,
+	errorMessage,
 	onStartWorkflow,
 	isStarting,
 }: WorkflowDiagramProps) {
@@ -257,7 +259,9 @@ export function WorkflowDiagram({
 											? "bg-yellow-500/5 dark:bg-yellow-500/10 ring-yellow-400/40 dark:ring-yellow-500/40"
 											: status === "completed"
 												? "bg-white/60 dark:bg-neutral-900/60 ring-green-400/30 dark:ring-green-500/30"
-												: "bg-white/60 dark:bg-neutral-900/60 ring-black/5 dark:ring-white/10"
+												: status === "rejected" || status === "error"
+													? "bg-red-500/5 dark:bg-red-500/10 ring-red-400/40 dark:ring-red-500/40"
+													: "bg-white/60 dark:bg-neutral-900/60 ring-black/5 dark:ring-white/10"
 								}`}
 							>
 								<div className="flex items-center gap-2">
@@ -270,7 +274,9 @@ export function WorkflowDiagram({
 													? "bg-yellow-500/10 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400"
 													: status === "running"
 														? "bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400"
-														: "bg-neutral-500/10 dark:bg-neutral-500/20 text-neutral-600 dark:text-neutral-300"
+														: status === "rejected" || status === "error"
+															? "bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-400"
+															: "bg-neutral-500/10 dark:bg-neutral-500/20 text-neutral-600 dark:text-neutral-300"
 										}`}
 									>
 										{status === "completed" ? (
@@ -321,6 +327,20 @@ export function WorkflowDiagram({
 													d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 												/>
 											</svg>
+										) : status === "rejected" || status === "error" ? (
+											<svg
+												className="w-3.5 h-3.5"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M6 18L18 6M6 6l12 12"
+												/>
+											</svg>
 										) : (
 											<svg
 												className="w-3.5 h-3.5"
@@ -369,12 +389,20 @@ export function WorkflowDiagram({
 								>
 									<div className="absolute left-1/2 -translate-x-1/2 -top-[5px] w-3 h-3 backdrop-blur-xl bg-neutral-900/90 dark:bg-neutral-700/90 rotate-45" />
 
-									<button
-										onClick={() => handleApprove(true)}
-										className="relative px-4 py-2 backdrop-blur-xl bg-neutral-900/90 dark:bg-neutral-700/90 hover:bg-neutral-700 text-white text-xs font-medium rounded-lg transition-all shadow-xl whitespace-nowrap"
-									>
-										Approve
-									</button>
+									<div className="relative flex gap-2">
+										<button
+											onClick={() => handleApprove(true)}
+											className="px-4 py-2 backdrop-blur-xl bg-neutral-900/90 dark:bg-neutral-700/90 hover:bg-neutral-700 text-white text-xs font-medium rounded-lg transition-all shadow-xl whitespace-nowrap"
+										>
+											Approve
+										</button>
+										<button
+											onClick={() => handleApprove(false)}
+											className="px-4 py-2 backdrop-blur-xl bg-white/90 dark:bg-neutral-800/90 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-700 dark:text-red-300 text-xs font-medium rounded-lg transition-all shadow-xl ring-1 ring-red-400/40 whitespace-nowrap"
+										>
+											Reject
+										</button>
+									</div>
 								</div>
 							);
 						}
@@ -382,6 +410,12 @@ export function WorkflowDiagram({
 					return null;
 				})}
 			</div>
+			{(workflowStatus === "rejected" || workflowStatus === "error") &&
+			errorMessage ? (
+				<div className="sticky bottom-4 mx-auto w-fit rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-700 ring-1 ring-red-400/30 dark:text-red-300">
+					{errorMessage}
+				</div>
+			) : null}
 		</div>
 	);
 }

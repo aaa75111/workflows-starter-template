@@ -1,3 +1,5 @@
+import { approvalFailure } from "./approval";
+
 // Export the Workflow and Durable Object classes
 export { ShionPipelineWorkflow } from "./workflow";
 export { WorkflowStatusDO } from "./durable-object";
@@ -73,10 +75,14 @@ export default {
 			}
 
 			try {
-				const body = (await request.json()) as {
-					approved: boolean;
-					comment?: string;
-				};
+				const body: unknown = await request.json();
+				if (approvalFailure(body) === "INVALID_APPROVAL") {
+					return Response.json(
+						{ error: "approved must be a boolean" },
+						{ status: 400 },
+					);
+				}
+
 				const instance = await env.SHION_WORKFLOW.get(instanceId);
 
 				await instance.sendEvent({

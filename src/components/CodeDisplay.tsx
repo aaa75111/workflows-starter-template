@@ -3,7 +3,7 @@ import type { JSX } from "react";
 
 interface CodeDisplayProps {
 	currentStep: string | null;
-	workflowStatus: "idle" | "running" | "completed" | "error";
+	workflowStatus: "idle" | "running" | "completed" | "rejected" | "error";
 	onStartWorkflow: () => void;
 	isStarting: boolean;
 }
@@ -25,6 +25,9 @@ const WORKFLOW_CODE = `export class ShionPipelineWorkflow extends WorkflowEntryp
       type: 'editorial-approval',
       timeout: '60 minutes'
     });
+    if (approval.payload?.approved !== true) {
+      throw new Error('approval was not granted');
+    }
 
     // Step 4: Publish to channels
     await step.do('publish to channels', async () => {
