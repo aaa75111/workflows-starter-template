@@ -55,7 +55,7 @@ interface AvWorkflowUpdateMessage {
 }
 
 type Action =
-	| { type: "CONNECTED" }
+	| { type: "CONNECTED"; instanceId: string }
 	| { type: "DISCONNECTED" }
 	| { type: "UPDATE"; payload: AvWorkflowUpdateMessage }
 	| { type: "RESET" };
@@ -74,7 +74,7 @@ const initialState: AvWorkflowState = {
 function reducer(state: AvWorkflowState, action: Action): AvWorkflowState {
 	switch (action.type) {
 		case "CONNECTED":
-			return { ...state, wsConnected: true };
+			return { ...state, instanceId: action.instanceId, wsConnected: true };
 
 		case "DISCONNECTED":
 			return { ...state, wsConnected: false };
@@ -108,35 +108,52 @@ export function useAvWorkflowWebSocket(
 		}
 
 		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-		const wsUrl = `${protocol}//${window.location.host}/ws/av?instanceId=${instanceId}`;
+		const wsUrl = `${protocol}//${window.location.host}/ws/av?instanceId=${encodeURIComponent(instanceId)}`;
+		let disposed = false;
+		let retryTimer: ReturnType<typeof setTimeout> | undefined;
+		let retryDelay = 1000;
+		let ws: WebSocket;
+		dispatch({ type: "RESET" });
 
-		const ws = new WebSocket(wsUrl);
+		const connect = () => {
+			if (disposed) return;
+			ws = new WebSocket(wsUrl);
 
-		ws.onopen = () => {
-			dispatch({ type: "CONNECTED" });
-		};
+			ws.onopen = () => {
+				if (disposed) return;
+				retryDelay = 1000;
+				dispatch({ type: "CONNECTED", instanceId });
+			};
 
-		ws.onclose = () => {
-			dispatch({ type: "DISCONNECTED" });
-		};
+			ws.onclose = () => {
+				if (disposed) return;
+				dispatch({ type: "DISCONNECTED" });
+				retryTimer = setTimeout(connect, retryDelay);
+				retryDelay = Math.min(retryDelay * 2, 30000);
+			};
 
-		ws.onerror = () => {
-			// Connection errors handled by onclose
-		};
+			ws.onerror = () => {
+				// Connection errors handled by onclose
+			};
 
-		ws.onmessage = (event) => {
-			try {
-				const data = JSON.parse(event.data);
+			ws.onmessage = (event) => {
+				if (disposed) return;
+				try {
+					const data = JSON.parse(event.data);
 
-				if (data.type === "av_workflow_update") {
-					dispatch({ type: "UPDATE", payload: data });
+					if (data.type === "av_workflow_update") {
+						dispatch({ type: "UPDATE", payload: data });
+					}
+				} catch {
+					// Ignore malformed messages
 				}
-			} catch {
-				// Ignore malformed messages
-			}
+			};
 		};
+		connect();
 
 		return () => {
+			disposed = true;
+			clearTimeout(retryTimer);
 			ws.close();
 		};
 	}, [instanceId]);

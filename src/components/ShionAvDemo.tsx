@@ -39,7 +39,7 @@ export function ShionAvDemo() {
 	const [isResponding, setIsResponding] = useState(false);
 	const state = useAvWorkflowWebSocket(instanceId);
 
-	const isIdle = state.workflowStatus === "idle" && !isStarting;
+	const isIdle = !instanceId && !isStarting;
 	const isTerminal =
 		state.workflowStatus === "completed" ||
 		state.workflowStatus === "rejected" ||
@@ -115,6 +115,11 @@ export function ShionAvDemo() {
 						{isTerminal ? "Reset" : "Start"}
 					</button>
 				</div>
+				{instanceId && !state.wsConnected && (
+					<p role="status" className="text-xs text-neutral-500 dark:text-neutral-400">
+						Reconnecting to workflow status…
+					</p>
+				)}
 
 				<ul className="flex flex-col gap-2">
 					{AV_STEP_NAMES.map((name) => {
@@ -153,18 +158,18 @@ export function ShionAvDemo() {
 					</p>
 				)}
 
-				{state.currentStep === "wait for editorial approval" && (
+				{!isTerminal && state.currentStep === "wait for editorial approval" && (
 					<div className="flex gap-2">
 						<button
 							onClick={() => handleDecision(true)}
-							disabled={isResponding}
+							disabled={isResponding || !state.wsConnected}
 							className="px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-500 disabled:opacity-50 transition-all"
 						>
 							Approve
 						</button>
 						<button
 							onClick={() => handleDecision(false)}
-							disabled={isResponding}
+							disabled={isResponding || !state.wsConnected}
 							className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 transition-all"
 						>
 							Reject

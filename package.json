@@ -58,7 +58,7 @@
 		"preview": "npm run build && vite preview",
 		"pretest": "npm run build",
 		"test": "vitest run",
-		"verify": "npm run lint && npm run build && vitest run && wrangler deploy --dry-run"
+		"verify": "node --test scripts/av-websocket-checks.mjs && npm run lint && npm run build && vitest run && wrangler deploy --dry-run"
 	},
 	"type": "module",
 	"engines": {
