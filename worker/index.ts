@@ -83,7 +83,20 @@ export default {
 					);
 				}
 
+				const stub = env.WORKFLOW_STATUS.get(env.WORKFLOW_STATUS.idFromName(instanceId));
+				// Only the executing gated Workflow writes this marker. An HTTP
+				// start response or a copied legacy snapshot cannot establish it.
+				if (!(await stub.hasApprovalGate())) {
+					return Response.json({
+						error: "Legacy or unverified workflow requires manual review",
+						code: "LEGACY_INSTANCE_REQUIRES_REVIEW",
+					}, { status: 409 });
+				}
 				const instance = await env.SHION_WORKFLOW.get(instanceId);
+				const state = await instance.status();
+				if (["complete", "errored", "terminated"].includes(state.status)) {
+					return Response.json({ error: "Workflow is already stopped" }, { status: 409 });
+				}
 
 				await instance.sendEvent({
 					type: "editorial-approval",
@@ -94,10 +107,10 @@ export default {
 					success: true,
 					message: "Event sent successfully",
 				});
-			} catch {
+			} catch (error) {
 				return Response.json(
 					{ error: "Failed to send event" },
-					{ status: 500 },
+					{ status: error instanceof SyntaxError ? 400 : 500 },
 				);
 			}
 		}

@@ -31,21 +31,23 @@ export class ShionPipelineWorkflow extends WorkflowEntrypoint<
 		let activeStep = ingest;
 		let failureCode = "STEP_FAILED";
 
-		// Notify Durable Object of step progress. Called outside step.do, so this
-		// operation may repeat. Safe here because updateStep is idempotent.
+		// Journal status writes so transient failures retry and a failed
+		// pre-publish notification cannot silently allow publication.
 		// Refer to: https://developers.cloudflare.com/workflows/build/rules-of-workflows/
 		const notifyStep = async (
 			stepName: string,
 			status: "running" | "completed" | "waiting",
 		) => {
-			try {
+			await step.do(`notify ${stepName}: ${status}`, async () => {
 				await stub.updateStep(stepName, status);
-			} catch {
-				// Status updates are best-effort; the workflow engine remains source of truth.
-			}
+			});
 		};
 
 		try {
+			// The marker is written by this Workflow version, never by HTTP.
+			await step.do("register approval gate", async () => {
+				await stub.registerApprovalGate();
+			});
 			// Step 1: Ingest the uploaded audio/video file - shows step.do usage
 			await notifyStep(ingest, "running");
 			const media = await step.do(ingest, async () => {
@@ -68,9 +70,9 @@ export class ShionPipelineWorkflow extends WorkflowEntrypoint<
 				type: "editorial-approval",
 				timeout: "60 minutes",
 			});
-			const decisionFailure = approvalFailure(approval.payload);
+			const decisionFailure = await step.do("validate approval", async () => approvalFailure(approval.payload));
+			failureCode = decisionFailure ?? "STEP_FAILED";
 			if (decisionFailure) {
-				failureCode = decisionFailure;
 				throw new Error(decisionFailure);
 			}
 			await notifyStep(review, "completed");
@@ -88,9 +90,12 @@ export class ShionPipelineWorkflow extends WorkflowEntrypoint<
 				failureCode = "APPROVAL_TIMEOUT";
 			}
 			try {
-				await stub.markError(failureCode, activeStep);
+				await step.do("record workflow failure", async () => {
+					await stub.markError(failureCode, activeStep);
+				});
 			} catch {
-				// Preserve the engine failure even if the status service is unavailable.
+				// Preserve the original engine error after status retries are exhausted.
+				console.error("Workflow status persistence failed", { instanceId, failureCode });
 			}
 			throw error;
 		}
