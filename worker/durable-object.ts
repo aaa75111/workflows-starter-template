@@ -61,6 +61,15 @@ export class WorkflowStatusDO extends DurableObject {
 		});
 	}
 
+	// This metadata is deliberately absent from historical snapshots.
+	async registerApprovalGate(): Promise<void> {
+		await this.ctx.storage.put("approvalGateVersion", "strict-editorial-v1");
+	}
+
+	async hasApprovalGate(): Promise<boolean> {
+		return await this.ctx.storage.get("approvalGateVersion") === "strict-editorial-v1";
+	}
+
 	async fetch(request: Request): Promise<Response> {
 		if (request.headers.get("Upgrade") === "websocket") {
 			const pair = new WebSocketPair();
@@ -88,9 +97,16 @@ export class WorkflowStatusDO extends DurableObject {
 			this.workflowStatus === "error" ||
 			this.workflowStatus === "completed"
 		) {
+			// A prior storage failure may have left only in-memory terminal state.
+			await this.persistAndBroadcast();
 			return;
 		}
 
+		// Replayed notifications must not regress an already completed step.
+		if (this.stepStatuses.get(stepName) === "completed") {
+			await this.persistAndBroadcast();
+			return;
+		}
 		this.stepStatuses.set(stepName, status);
 
 		if (status === "running" || status === "waiting") {
@@ -118,6 +134,8 @@ export class WorkflowStatusDO extends DurableObject {
 			this.workflowStatus === "error" ||
 			this.workflowStatus === "completed"
 		) {
+			// A prior storage failure may have left only in-memory terminal state.
+			await this.persistAndBroadcast();
 			return;
 		}
 
@@ -157,10 +175,12 @@ export class WorkflowStatusDO extends DurableObject {
 	}
 
 	private async persistAndBroadcast(): Promise<void> {
-		await this.ctx.storage.put("stepStatuses", Object.fromEntries(this.stepStatuses));
-		await this.ctx.storage.put("currentStep", this.currentStep);
-		await this.ctx.storage.put("workflowStatus", this.workflowStatus);
-		await this.ctx.storage.put("errorMessage", this.errorMessage);
+		await this.ctx.storage.put({
+			stepStatuses: Object.fromEntries(this.stepStatuses),
+			currentStep: this.currentStep,
+			workflowStatus: this.workflowStatus,
+			errorMessage: this.errorMessage,
+		});
 		this.broadcast(this.getStateMessage());
 	}
 
