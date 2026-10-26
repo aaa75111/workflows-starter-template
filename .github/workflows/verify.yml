@@ -35,3 +35,8 @@ jobs:
         run: npm audit --audit-level=low
       - name: Lint, build, test, and check Worker packaging
         run: npm run verify
+      - name: Validate migration bootstrap and private staging package without deployment
+        run: |
+          node --test scripts/bootstrap-checks.mjs
+          node scripts/check-bootstrap.mjs production
+          node scripts/check-bootstrap.mjs staging

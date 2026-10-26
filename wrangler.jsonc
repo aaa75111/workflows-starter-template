@@ -36,6 +36,10 @@
 			{
 				"name": "WORKFLOW_STATUS",
 				"class_name": "WorkflowStatusDO"
+			},
+			{
+				"name": "AV_WORKFLOW_STATUS",
+				"class_name": "AvWorkflowStatusDO"
 			}
 		]
 	},
@@ -47,7 +51,30 @@
 		{
 			"tag": "v1",
 			"new_sqlite_classes": ["WorkflowStatusDO"]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": ["AvWorkflowStatusDO"]
 		}
 	],
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"env": {
+		"bootstrap-staging": {
+			"name": "workflows-starter-template-bootstrap-staging",
+			"workers_dev": false,
+			"preview_urls": false,
+			"routes": [],
+			"workflows": [{
+				"name": "shion-av-bootstrap-staging",
+				"binding": "SHION_WORKFLOW",
+				"class_name": "ShionPipelineWorkflow"
+			}],
+			"durable_objects": {
+				"bindings": [
+					{ "name": "WORKFLOW_STATUS", "class_name": "WorkflowStatusDO" },
+					{ "name": "AV_WORKFLOW_STATUS", "class_name": "AvWorkflowStatusDO" }
+				]
+			}
+		}
+	}
 }
