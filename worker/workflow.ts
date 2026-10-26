@@ -2,10 +2,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 /**
- * Shion AV Content Pipeline
- *
- * Models the lifecycle of a single piece of audio/video content, from raw
- * upload through to publication. Showcases:
+ * This workflow showcases:
  * - Durable step execution with step.do
  * - Time-based delays with step.sleep
  * - Interactive pausing with step.waitForEvent
@@ -13,7 +10,7 @@ import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
  *
  * @see https://developers.cloudflare.com/workflows
  */
-export class ShionPipelineWorkflow extends WorkflowEntrypoint<
+export class MyWorkflow extends WorkflowEntrypoint<
 	Env,
 	Record<string, unknown>
 > {
@@ -36,33 +33,33 @@ export class ShionPipelineWorkflow extends WorkflowEntrypoint<
 			}
 		};
 
-		// Step 1: Ingest the uploaded audio/video file - shows step.do usage
-		await notifyStep("ingest media", "running");
-		const media = await step.do("ingest media", async () => {
+		// Step 1: Basic step - shows step.do usage
+		await notifyStep("process data", "running");
+		const result = await step.do("process data", async () => {
 			await new Promise((resolve) => setTimeout(resolve, 1000));
-			return { ingested: true, durationSec: 342, timestamp: Date.now() };
+			return { processed: true, timestamp: Date.now() };
 		});
-		await notifyStep("ingest media", "completed");
+		await notifyStep("process data", "completed");
 
-		// Step 2: Transcode to delivery formats & normalize audio - shows step.sleep for delays
-		await notifyStep("transcode & normalize", "running");
-		await step.sleep("transcode & normalize", "2 seconds");
-		await notifyStep("transcode & normalize", "completed");
+		// Step 2: Sleep step - shows step.sleep for delays
+		await notifyStep("wait 2 seconds", "running");
+		await step.sleep("wait 2 seconds", "2 seconds");
+		await notifyStep("wait 2 seconds", "completed");
 
-		// Step 3: Wait for editorial approval - shows interactive step.waitForEvent
-		await notifyStep("wait for editorial approval", "waiting");
-		const approval = await step.waitForEvent("wait for editorial approval", {
-			type: "editorial-approval",
+		// Step 3: Wait for event - shows interactive step.waitForEvent
+		await notifyStep("wait for approval", "waiting");
+		const approval = await step.waitForEvent("wait for approval", {
+			type: "user-approval",
 			timeout: "60 minutes",
 		});
-		await notifyStep("wait for editorial approval", "completed");
+		await notifyStep("wait for approval", "completed");
 
-		// Step 4: Publish to channels - final step
-		await notifyStep("publish to channels", "running");
-		await step.do("publish to channels", async () => {
-			console.log("Results:", { media, approval: approval.payload });
+		// Step 4: Final step
+		await notifyStep("final", "running");
+		await step.do("final", async () => {
+			console.log("Results:", { result, approval: approval.payload });
 			await new Promise((resolve) => setTimeout(resolve, 1000));
 		});
-		await notifyStep("publish to channels", "completed");
+		await notifyStep("final", "completed");
 	}
 }

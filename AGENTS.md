@@ -36,6 +36,12 @@ simultaneous agents; inspect `git status --short --branch` before editing.
 - Cloudflare Builds runs `npm run build`. Non-production branches use
   `npx wrangler versions upload`; uploading a version does not promote it to
   production traffic. `npm run deploy` performs a production deployment.
+- Pending Durable Object migrations cannot be applied by version upload. Use
+  `npm run check:staging` for the isolated target's guard tests/build/dry run.
+  `npm run deploy:staging` requires an explicitly selected authorized account;
+  it targets independent resource names with public URLs disabled. Do not change
+  production's non-production version command to an unqualified deploy. Read
+  `docs/deployment-acceptance.md` before merging (main auto-deploys).
 - Use the authenticated GitHub connection to update the requested PR branch and
   inspect Cloudflare's check for that exact commit. Use the existing authenticated
   Cloudflare connection or browser session when build details are needed.

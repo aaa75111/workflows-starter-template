@@ -1,25 +1,49 @@
+import { prepareAvStatus, readLegacyAvSnapshot } from "./av-compatibility";
+
 // Export the Workflow and Durable Object classes
-export { ShionPipelineWorkflow } from "./workflow";
+export { MyWorkflow } from "./workflow";
 export { WorkflowStatusDO } from "./durable-object";
+// Shion AV content pipeline preview demo - isolated bindings, see
+// worker/shion-pipeline-workflow.ts and worker/av-durable-object.ts.
+export { ShionPipelineWorkflow } from "./shion-pipeline-workflow";
+export { AvWorkflowStatusDO } from "./av-durable-object";
 
 /**
  * Main Worker fetch handler
  *
- * Handles API routes and WebSocket upgrade requests for the Shion AV
- * content pipeline workflow:
+ * Handles API routes and WebSocket upgrade requests for workflow management:
  * - POST /api/workflow/start - Create new workflow instance
  * - GET /api/workflow/status/:id - Get workflow status
  * - POST /api/workflow/event/:id - Send events to workflow
  * - GET /ws - WebSocket connection for real-time updates
+ *
+ * The Shion AV content pipeline preview demo has its own, separate routes
+ * below (/api/av/workflow/*, /ws/av) so it never shares instance IDs,
+ * Durable Object state or WebSocket messages with the routes above.
  */
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
+		// PR #6 used the default endpoints and status namespace for AV IDs.
+		// Route only recognizable AV snapshots; leave genuine legacy IDs alone.
+		const oldApi = /^\/api\/workflow\/(status|event)\/([^/]+)$/.exec(url.pathname);
+		const oldId = oldApi?.[2] ?? (url.pathname === "/ws" ? url.searchParams.get("instanceId") : null);
+		let legacyAv = false;
+		if (oldId) {
+			try {
+				legacyAv = Boolean(await readLegacyAvSnapshot(env, oldId));
+				if (legacyAv && oldApi) {
+					url.pathname = url.pathname.replace("/api/workflow/", "/api/av/workflow/");
+				}
+			} catch {
+				return Response.json({ error: "Stored workflow state requires review" }, { status: 409 });
+			}
+		}
 
 		// API: Start a new workflow instance
 		if (url.pathname === "/api/workflow/start" && request.method === "POST") {
 			try {
-				const instance = await env.SHION_WORKFLOW.create({
+				const instance = await env.MY_WORKFLOW.create({
 					params: {
 						timestamp: Date.now(),
 					},
@@ -48,7 +72,7 @@ export default {
 			}
 
 			try {
-				const instance = await env.SHION_WORKFLOW.get(instanceId);
+				const instance = await env.MY_WORKFLOW.get(instanceId);
 				const status = await instance.status();
 				return Response.json(status);
 			} catch {
@@ -77,10 +101,10 @@ export default {
 					approved: boolean;
 					comment?: string;
 				};
-				const instance = await env.SHION_WORKFLOW.get(instanceId);
+				const instance = await env.MY_WORKFLOW.get(instanceId);
 
 				await instance.sendEvent({
-					type: "editorial-approval",
+					type: "user-approval",
 					payload: body,
 				});
 
@@ -114,6 +138,139 @@ export default {
 				const doId = env.WORKFLOW_STATUS.idFromName(instanceId);
 				const stub = env.WORKFLOW_STATUS.get(doId);
 				return stub.fetch(request);
+			} catch {
+				return new Response("Failed to establish WebSocket connection", {
+					status: 500,
+				});
+			}
+		}
+
+		// --- Shion AV content pipeline preview demo (isolated routes) ---
+		// Separate Workflow binding (SHION_WORKFLOW) and Durable Object
+		// (AV_WORKFLOW_STATUS) from the routes above; see worker/index.ts
+		// top-of-file comment and AGENTS.md for why the default demo's
+		// MY_WORKFLOW/WORKFLOW_STATUS bindings and routes stay untouched.
+
+		// API: Start a new Shion AV content pipeline instance
+		if (
+			url.pathname === "/api/av/workflow/start" &&
+			request.method === "POST"
+		) {
+			try {
+				const instance = await env.SHION_WORKFLOW.create({
+					params: {
+						timestamp: Date.now(),
+					},
+				});
+
+				return Response.json({
+					instanceId: instance.id,
+					message: "Workflow started successfully",
+				});
+			} catch {
+				return Response.json(
+					{ error: "Failed to start workflow" },
+					{ status: 500 },
+				);
+			}
+		}
+
+		// API: Get Shion AV content pipeline instance status
+		if (url.pathname.startsWith("/api/av/workflow/status/")) {
+			const instanceId = url.pathname.split("/").pop();
+			if (!instanceId) {
+				return Response.json(
+					{ error: "Instance ID required" },
+					{ status: 400 },
+				);
+			}
+
+			try {
+				const instance = await env.SHION_WORKFLOW.get(instanceId);
+				const status = await instance.status();
+				return Response.json(status);
+			} catch {
+				return Response.json(
+					{ error: "Failed to get workflow status" },
+					{ status: 500 },
+				);
+			}
+		}
+
+		// API: Send editorial approval/rejection event to a Shion AV pipeline instance
+		if (
+			url.pathname.startsWith("/api/av/workflow/event/") &&
+			request.method === "POST"
+		) {
+			const instanceId = url.pathname.split("/").pop();
+			if (!instanceId) {
+				return Response.json(
+					{ error: "Instance ID required" },
+					{ status: 400 },
+				);
+			}
+
+			try {
+				// Cloud replay of pre-isolation histories still reached PR #6's
+				// publish step for rejected or malformed events after deployment.
+				// Preserve those instances and require an explicit recovery plan.
+				if (legacyAv || await readLegacyAvSnapshot(env, instanceId)) {
+					return Response.json({
+						error: "Legacy AV instance requires manual review before any decision",
+						code: "LEGACY_INSTANCE_REQUIRES_REVIEW",
+					}, { status: 409 });
+				}
+				const body: unknown = await request.json();
+				await prepareAvStatus(env, instanceId);
+				const instance = await env.SHION_WORKFLOW.get(instanceId);
+
+				const state = await instance.status();
+				if (["complete", "errored", "terminated"].includes(state.status)) {
+					return Response.json({ error: "Workflow is already stopped" }, { status: 409 });
+				}
+				await instance.sendEvent({
+					type: "editorial-approval",
+					payload: body,
+				});
+
+				return Response.json({
+					success: true,
+					message: "Event sent successfully",
+				});
+			} catch (error) {
+				return Response.json(
+					{ error: "Failed to send event" },
+					{ status: error instanceof SyntaxError ? 400 : 500 },
+				);
+			}
+		}
+
+		// WebSocket: Connect to Shion AV content pipeline status updates
+		if (url.pathname === "/ws/av") {
+			const instanceId = url.searchParams.get("instanceId");
+			if (!instanceId) {
+				return new Response("instanceId query parameter required", {
+					status: 400,
+				});
+			}
+
+			const upgradeHeader = request.headers.get("Upgrade");
+			if (upgradeHeader !== "websocket") {
+				return new Response("Expected Upgrade: websocket", { status: 426 });
+			}
+
+			try {
+				// Old instances continue notifying WORKFLOW_STATUS. A one-time copy
+				// cannot be presented as their live isolated state. Their original
+				// /ws connection above continues reading the original DO directly.
+				if (await readLegacyAvSnapshot(env, instanceId)) {
+					return Response.json({
+						error: "Use the original WebSocket to inspect this legacy AV instance",
+						code: "LEGACY_INSTANCE_REQUIRES_REVIEW",
+					}, { status: 409 });
+				}
+				const stub = await prepareAvStatus(env, instanceId);
+				return stub.fetch(new Request(url, request));
 			} catch {
 				return new Response("Failed to establish WebSocket connection", {
 					status: 500,

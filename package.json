@@ -50,13 +50,15 @@
 		"build": "tsc -b && vite build",
 		"cf-typegen": "wrangler types",
 		"check": "npm run build && wrangler deploy --dry-run",
+		"check:staging": "node --test scripts/staging-checks.mjs && node scripts/staging.mjs --dry-run",
 		"deploy": "npm run build && wrangler deploy",
+		"deploy:staging": "node scripts/staging.mjs --deploy",
 		"dev": "vite",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
 		"pretest": "npm run build",
 		"test": "vitest run",
-		"verify": "npm run lint && npm run build && vitest run && wrangler deploy --dry-run"
+		"verify": "node --test scripts/av-websocket-checks.mjs && npm run lint && npm run build && vitest run && wrangler deploy --dry-run"
 	},
 	"type": "module",
 	"engines": {

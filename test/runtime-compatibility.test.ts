@@ -13,9 +13,9 @@ function nextMessage(socket: WebSocket): Promise<MessageEvent> {
 	});
 }
 
-async function connectStatus(instanceId: string) {
+async function connectStatus(instanceId: string, path = "/ws") {
 	const response = await SELF.fetch(
-		`https://test/ws?instanceId=${instanceId}`,
+		`https://test${path}?instanceId=${instanceId}`,
 		{ headers: { Upgrade: "websocket" } },
 	);
 	expect(response.status).toBe(101);
@@ -34,6 +34,11 @@ async function closeSocket(socket: WebSocket) {
 }
 
 describe("Cloudflare dependency compatibility", () => {
+	// This repo's demo is isolated from the SHION editorial-approval pipeline
+	// (see worker/index.ts and AGENTS.md): the generic MY_WORKFLOW/WORKFLOW_STATUS
+	// routes below stay untouched, and SHION_WORKFLOW/AV_WORKFLOW_STATUS get their
+	// own /api/av/workflow/* and /ws/av routes. Exercise those isolated routes here
+	// rather than the pre-isolation /api/workflow/* + /ws surface.
 	it("routes HTTP editorial approval to SHION_WORKFLOW and completes all four stages", async () => {
 		const id = crypto.randomUUID();
 		await using instance = await introspectWorkflowInstance(env.SHION_WORKFLOW, id);
@@ -43,7 +48,7 @@ describe("Cloudflare dependency compatibility", () => {
 		await env.SHION_WORKFLOW.create({ id });
 		await instance.waitForStepResult({ name: "ingest media" });
 
-		const approval = await SELF.fetch(`https://test/api/workflow/event/${id}`, {
+		const approval = await SELF.fetch(`https://test/api/av/workflow/event/${id}`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ approved: true }),
@@ -55,14 +60,14 @@ describe("Cloudflare dependency compatibility", () => {
 			instance.waitForStepResult({ name: "publish to channels" }),
 		).resolves.toBeUndefined();
 
-		const status = await SELF.fetch(`https://test/api/workflow/status/${id}`);
+		const status = await SELF.fetch(`https://test/api/av/workflow/status/${id}`);
 		expect(status.status).toBe(200);
 		expect(await status.json()).toMatchObject({ status: "complete" });
 
-		const { socket, initial } = await connectStatus(id);
+		const { socket, initial } = await connectStatus(id, "/ws/av");
 		try {
 			expect(JSON.parse((await initial).data as string)).toMatchObject({
-				type: "workflow_update",
+				type: "av_workflow_update",
 				currentStep: null,
 				workflowStatus: "completed",
 				stepStatuses: {
@@ -79,14 +84,14 @@ describe("Cloudflare dependency compatibility", () => {
 
 	it("broadcasts Durable Object updates and restores the persisted state after eviction", async () => {
 		const id = crypto.randomUUID();
-		const stub = env.WORKFLOW_STATUS.get(env.WORKFLOW_STATUS.idFromName(id));
+		const stub = env.AV_WORKFLOW_STATUS.get(env.AV_WORKFLOW_STATUS.idFromName(id));
 		const expected = {
-			type: "workflow_update",
+			type: "av_workflow_update",
 			currentStep: "wait for editorial approval",
 			workflowStatus: "running",
 			stepStatuses: { "wait for editorial approval": "waiting" },
 		};
-		const { socket, initial } = await connectStatus(id);
+		const { socket, initial } = await connectStatus(id, "/ws/av");
 		try {
 			expect(JSON.parse((await initial).data as string)).toMatchObject({
 				currentStep: null,
@@ -108,7 +113,7 @@ describe("Cloudflare dependency compatibility", () => {
 		}
 
 		await evictDurableObject(stub);
-		const reconnected = await connectStatus(id);
+		const reconnected = await connectStatus(id, "/ws/av");
 		try {
 			expect(JSON.parse((await reconnected.initial).data as string)).toMatchObject(expected);
 		} finally {
