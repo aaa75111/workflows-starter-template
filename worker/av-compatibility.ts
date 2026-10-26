@@ -1,9 +1,10 @@
 const AV_STEPS = ["ingest media", "transcode & normalize", "wait for editorial approval", "publish to channels"];
 
 export interface LegacyAvSnapshot {
-	stepStatuses: Record<string, "pending" | "running" | "waiting" | "completed" | "error">;
+	stepStatuses: Record<string, "pending" | "running" | "waiting" | "completed" | "rejected" | "error">;
 	currentStep: string | null;
-	workflowStatus: "running" | "completed" | "error";
+	workflowStatus: "running" | "completed" | "rejected" | "error";
+	errorMessage?: string | null;
 }
 
 export function isLegacyAvSnapshot(value: unknown): value is LegacyAvSnapshot {
@@ -12,8 +13,9 @@ export function isLegacyAvSnapshot(value: unknown): value is LegacyAvSnapshot {
 	const entries = Object.entries(value.stepStatuses);
 	if (!entries.some(([key]) => AV_STEPS.includes(key))) return false;
 	if (entries.length !== AV_STEPS.length || entries.some(([key, status]) =>
-		!AV_STEPS.includes(key) || !["pending", "running", "waiting", "completed", "error"].includes(status)) ||
-		!("workflowStatus" in value) || !["running", "completed", "error"].includes(String(value.workflowStatus)) ||
+		!AV_STEPS.includes(key) || !["pending", "running", "waiting", "completed", "rejected", "error"].includes(status)) ||
+		!("workflowStatus" in value) || !["running", "completed", "rejected", "error"].includes(String(value.workflowStatus)) ||
+		("errorMessage" in value && value.errorMessage !== null && typeof value.errorMessage !== "string") ||
 		!("currentStep" in value) || (value.currentStep !== null && !AV_STEPS.includes(String(value.currentStep)))) {
 		throw new Error("Mixed or unknown AV snapshot requires review");
 	}
