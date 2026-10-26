@@ -69,6 +69,7 @@ export class AvWorkflowStatusDO extends DurableObject {
 		this.stepStatuses = new Map(Object.entries(snapshot.stepStatuses));
 		this.currentStep = snapshot.currentStep;
 		this.workflowStatus = snapshot.workflowStatus;
+		this.errorMessage = snapshot.errorMessage ?? null;
 		await this.persistAndBroadcast();
 	}
 
