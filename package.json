@@ -56,7 +56,8 @@
 		"preview": "npm run build && vite preview",
 		"pretest": "npm run build",
 		"test": "vitest run",
-		"verify": "npm run lint && npm run build && vitest run && wrangler deploy --dry-run"
+		"verify": "npm run lint && npm run build && vitest run && wrangler deploy --dry-run",
+		"check:pr20-staging": "node --test scripts/pr20-staging-checks.mjs && node scripts/pr20-staging.mjs --dry-run && node scripts/pr20-fixtures.mjs --dry-run legacy-main && node scripts/pr20-fixtures.mjs --dry-run pr18"
 	},
 	"type": "module",
 	"engines": {

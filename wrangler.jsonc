@@ -49,5 +49,15 @@
 			"new_sqlite_classes": ["WorkflowStatusDO"]
 		}
 	],
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"env": {
+		"pr20_staging": {
+			"name": "workflows-starter-template-pr20-staging",
+			"workers_dev": false,
+			"preview_urls": false,
+			"routes": [],
+			"workflows": [{ "name": "shion-av-content-pipeline-pr20-staging", "binding": "SHION_WORKFLOW", "class_name": "ShionPipelineWorkflow" }],
+			"durable_objects": { "bindings": [{ "name": "WORKFLOW_STATUS", "class_name": "WorkflowStatusDO" }] }
+		}
+	}
 }
