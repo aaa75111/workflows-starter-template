@@ -1,4 +1,4 @@
-# AV v2 namespace bootstrap — prepared, not deployed
+# AV v2 namespace bootstrap — private rehearsal passed; production pending
 
 PR #16 cannot upload a production-target version while `AvWorkflowStatusDO` is
 an unapplied migration. This standalone change adds the new class, its binding,
@@ -13,6 +13,20 @@ Those changes remain separate review and release decisions. If main or the live
 deployment advances (especially to #18/#20), regenerate this bootstrap from the
 new exact baseline and repeat acceptance. Deploying this old baseline after a
 hotfix would revert that hotfix.
+
+## Latest acceptance on 2026-10-28
+
+[Detailed acceptance record](av-v2-bootstrap-acceptance-2026-10-28.md): the
+private bootstrap Worker was rehearsed from a frozen v1 fixture to v2 at source
+`b58fefd3fdff0404527b596c29553e53ee70fbb7`, followed by compatible forward
+redeployment. Original namespace identity, completed/waiting legacy engine
+journals and versions, application snapshots, WebSocket reconnects and later
+legacy continuation passed. Public routes, workers.dev and previews remain off.
+
+Production remains on `5a3defac-dbae-4b5d-a925-4c2045c81afc`, 100%, tag `v1`;
+no production migration or main merge occurred. Private success does not remove
+the production migration prerequisite or accept the full #16/#21 application.
+Application snapshots are not full SQLite/PITR or Workflow engine backups.
 
 ## Confirmed failure on 2026-10-26
 
@@ -71,12 +85,13 @@ bundle is not the original production bundle. The printed fixture directory
 contains a manifest, config and dry-run bundle. Creating it does not run a remote
 migration or create an instance.
 
-Verified locally: 6/6 Workers tests, 9/9 bootstrap guard tests, lint, TypeScript,
+Initial c52e629 preparation: 6/6 Workers tests, 9/9 guards. Current b58fefd
+preparation: 6/6 Workers tests, 25/25 guards, lint, TypeScript,
 Vite and both explicit-target dry-runs. The Workers tests exercise existing
 approval/HTTP/WebSocket behavior and confirm the new namespace does not modify
 original or existing AV storage. They do not prove a remote migration.
 
-Artifact-set SHA-256 from this preparation (hash of the sorted path/hash map):
+Historical artifact-set SHA-256 from c52e629 preparation (hash of the sorted path/hash map):
 
 | Target | SHA-256 |
 | --- | --- |
@@ -88,10 +103,15 @@ deploying its artifact. Manifests fingerprint that local build, including its
 emitted config and source maps; do not assume identical paths/hashes on another
 machine. Keep the matching bytes and fresh manifest together for approval.
 
-## Remote rehearsal and production execution still pending
+## Remote rehearsal and production execution
 
-The authorized MSI Desktop Commander device was offline during preparation.
-No staging deployment, production deployment, migration, or PR merge was run.
+The MSI device was offline during the initial 2026-10-26 preparation. On
+2026-10-28 its existing authorized OAuth session was available and the independent
+private v1→v2/forward-redeployment rehearsal passed. See the dated record above.
+The target is now v2: **do not redeploy its v1 fixture**. Production migration,
+full AV application acceptance and main merge remain pending. The following
+steps describe the release sequence; already completed private steps must be
+verified against retained evidence instead of replaying a v1 deployment.
 
 1. Reconnect the authorized MSI CLI and confirm account
    `9bf1848f94dd5acd6989dfb705adba37` using normal Wrangler authentication.
