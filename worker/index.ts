@@ -1,6 +1,7 @@
 // Export the Workflow and Durable Object classes
 export { ShionPipelineWorkflow } from "./workflow";
 export { WorkflowStatusDO } from "./durable-object";
+export { AvWorkflowStatusDO } from "./av-bootstrap-object";
 
 /**
  * Main Worker fetch handler
