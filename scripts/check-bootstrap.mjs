@@ -6,12 +6,15 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+export const bootstrapAccount = "9bf1848f94dd5acd6989dfb705adba37";
 const productionName = "workflows-starter-template";
 const stagingName = `${productionName}-bootstrap-staging`;
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 
-export function assertBootstrapTarget(config, target) {
+export function assertBootstrapTarget(config, target, phase = "v2") {
 	assert.ok(["production", "staging"].includes(target), "Unknown bootstrap target");
+	assert.ok(phase === "v2" || (phase === "v1" && target === "staging"), "v1 fixtures are staging-only");
+	assert.equal(config.account_id, bootstrapAccount, "Unexpected Cloudflare account");
 	assert.equal(config.name, target === "staging" ? stagingName : productionName);
 	assert.deepEqual(config.workflows, [{
 		name: target === "staging" ? "shion-av-bootstrap-staging" : "shion-av-content-pipeline",
@@ -19,12 +22,19 @@ export function assertBootstrapTarget(config, target) {
 	}]);
 	assert.deepEqual(config.durable_objects.bindings, [
 		{ name: "WORKFLOW_STATUS", class_name: "WorkflowStatusDO" },
-		{ name: "AV_WORKFLOW_STATUS", class_name: "AvWorkflowStatusDO" },
+		...(phase === "v2" ? [{ name: "AV_WORKFLOW_STATUS", class_name: "AvWorkflowStatusDO" }] : []),
 	]);
 	assert.deepEqual(config.migrations, [
 		{ tag: "v1", new_sqlite_classes: ["WorkflowStatusDO"] },
-		{ tag: "v2", new_sqlite_classes: ["AvWorkflowStatusDO"] },
+		...(phase === "v2" ? [{ tag: "v2", new_sqlite_classes: ["AvWorkflowStatusDO"] }] : []),
 	]);
+	assert.equal(Object.keys(config.exports ?? {}).length, 0, "Unexpected alternate DO lifecycle configuration");
+	for (const key of ["services", "kv_namespaces", "r2_buckets", "d1_databases", "dispatch_namespaces"])
+		assert.equal(config[key]?.length ?? 0, 0, `Unexpected external binding: ${key}`);
+	assert.equal(config.queues?.producers?.length ?? 0, 0);
+	assert.equal(config.queues?.consumers?.length ?? 0, 0);
+	assert.equal(config.unsafe?.bindings?.length ?? 0, 0);
+	assert.equal(config.unsafe?.metadata?.migrations, undefined);
 	if (target === "staging") {
 		assert.equal(config.workers_dev, false);
 		assert.equal(config.preview_urls, false);
@@ -33,11 +43,46 @@ export function assertBootstrapTarget(config, target) {
 	}
 }
 
+export function assertBootstrapSource(source, expectedSource, baselineCommit) {
+	assert.match(expectedSource, /^[a-f0-9]{40}$/, "Provide the full reviewed source SHA");
+	assert.equal(source.sourceCommit, expectedSource, "Checkout differs from the selected source SHA");
+	// A main push after merging this exact bootstrap is also valid; the baseline
+	// file checks below still reject any application or dependency change.
+	assert.ok([baselineCommit, source.sourceCommit].includes(source.originMain),
+		"origin/main changed; regenerate the bootstrap from the new baseline");
+	assert.equal(source.baselineIsAncestor, true, "Bootstrap must descend from its baseline");
+	assert.equal(source.status, "", "Bootstrap requires a clean checkout, including untracked files");
+}
+
+export function readBootstrapSource(expectedSource, baselineCommit) {
+	const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+	const source = {
+		sourceCommit: git("rev-parse", "HEAD"),
+		sourceTree: git("rev-parse", "HEAD^{tree}"),
+		originMain: git("rev-parse", "refs/remotes/origin/main"),
+		status: git("status", "--porcelain=v1", "--untracked-files=normal"),
+		baselineIsAncestor: git("merge-base", baselineCommit, "HEAD") === baselineCommit,
+	};
+	assertBootstrapSource(source, expectedSource, baselineCommit);
+	return source;
+}
+
+export function bootstrapEnvironment(target, sourceEnv = process.env) {
+	assert.ok(["production", "staging"].includes(target), "Unknown bootstrap target");
+	assert.ok(!sourceEnv.WRANGLER_CI_OVERRIDE_NAME, "Run outside the production Builds name override");
+	if (sourceEnv.CLOUDFLARE_ACCOUNT_ID) assert.equal(sourceEnv.CLOUDFLARE_ACCOUNT_ID, bootstrapAccount);
+	const env = { ...sourceEnv, CLOUDFLARE_ACCOUNT_ID: bootstrapAccount, WRANGLER_SEND_METRICS: "false" };
+	delete env.CLOUDFLARE_ENV;
+	if (target === "staging") env.CLOUDFLARE_ENV = "bootstrap-staging";
+	return env;
+}
+
 function main(args) {
-	assert.ok(args.length === 1 && ["production", "staging"].includes(args[0]),
-		"Usage: node scripts/check-bootstrap.mjs production|staging (dry-run only)");
+	assert.ok(args.length === 2 && ["production", "staging"].includes(args[0]),
+		"Usage: node scripts/check-bootstrap.mjs production|staging FULL_SOURCE_SHA (dry-run only)");
 	const target = args[0];
 	const baseline = JSON.parse(readFileSync(resolve(root, "scripts/bootstrap-baseline.json"), "utf8"));
+	const source = readBootstrapSource(args[1], baseline.commit);
 	for (const [path, hash] of Object.entries(baseline.files)) {
 		let bytes = readFileSync(resolve(root, path));
 		// Git may check text out as CRLF on the authorized Windows workstation.
@@ -49,10 +94,7 @@ function main(args) {
 		}
 		assert.equal(digest(bytes), hash, `Unexpected change to baseline file: ${path}`);
 	}
-	const env = { ...process.env, WRANGLER_SEND_METRICS: "false" };
-	assert.ok(!env.WRANGLER_CI_OVERRIDE_NAME, "Run this standalone check outside the production Builds name override");
-	delete env.CLOUDFLARE_ENV;
-	if (target === "staging") env.CLOUDFLARE_ENV = "bootstrap-staging";
+	const env = bootstrapEnvironment(target);
 	const run = (script, args, cliEnv = env) => execFileSync(process.execPath, [resolve(root, script), ...args],
 		{ cwd: root, env: cliEnv, stdio: "inherit" });
 	run("node_modules/typescript/bin/tsc", ["-b"]);
@@ -62,6 +104,8 @@ function main(args) {
 	assert.equal(typeof redirect.configPath, "string");
 	assert.equal(redirect.auxiliaryWorkers?.length ?? 0, 0);
 	const configPath = resolve(dirname(redirectPath), redirect.configPath);
+	assert.ok(relative(resolve(root, "dist"), configPath).replaceAll("\\", "/").startsWith("workflows_starter_template/"),
+		"Emitted config must be inside this checkout's Worker artifact");
 	assertBootstrapTarget(JSON.parse(readFileSync(configPath, "utf8")), target);
 	const deployEnv = { ...env };
 	delete deployEnv.CLOUDFLARE_ENV;
@@ -75,7 +119,11 @@ function main(args) {
 		}
 	}
 	hashDirectory(resolve(root, "dist"));
-	const manifest = { base: baseline.commit, target, config: relative(root, configPath).replaceAll("\\", "/"),
+	assert.deepEqual(readBootstrapSource(args[1], baseline.commit), source, "Source changed while building");
+	const manifest = { base: baseline.commit, sourceCommit: source.sourceCommit, sourceTree: source.sourceTree,
+		originMain: source.originMain, workingTreeClean: true, accountId: bootstrapAccount,
+		node: process.version, createdAt: new Date().toISOString(), target,
+		config: relative(root, configPath).replaceAll("\\", "/"),
 		files, artifactHash: digest(JSON.stringify(files)), deploymentPerformed: false };
 	const report = resolve(root, ".wrangler", `bootstrap-${target}-manifest.json`);
 	writeFileSync(report, JSON.stringify(manifest, null, 2) + "\n");

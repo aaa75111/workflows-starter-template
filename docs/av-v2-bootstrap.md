@@ -41,16 +41,35 @@ npm ci --progress=false
 npm audit --audit-level=low
 npm run verify
 node --test scripts/bootstrap-checks.mjs
-node scripts/check-bootstrap.mjs production
-node scripts/check-bootstrap.mjs staging
+# Refresh the baseline reference before preparation; this does not deploy.
+git fetch origin main
+# Supply the full source SHA selected for this review.
+node scripts/check-bootstrap.mjs production <FULL_SOURCE_SHA>
+node scripts/check-bootstrap.mjs staging <FULL_SOURCE_SHA>
+node scripts/prepare-bootstrap-fixture.mjs <FULL_SOURCE_SHA>
 ```
 
-The bootstrap script **only dry-runs**. It checks baseline file hashes (normalizing
+These preparation scripts **only dry-run**. They require a clean checkout, the
+full selected source SHA, the pinned baseline in the refreshed `origin/main`
+reference (or this exact source after its eventual merge), and the fixed account.
+CI fetches full history so the same checks apply there. The scripts check baseline file hashes (normalizing
 Git CRLF text checkouts), builds, inspects Vite's actual emitted config, checks
 the two namespaces and unchanged Workflow identity, and writes per-file artifact
-hashes to `.wrangler/bootstrap-<target>-manifest.json`. CI runs the same checks.
+hashes, source commit/tree, main reference, account, Node version and build time
+to `.wrangler/bootstrap-<target>-manifest.json`. CI runs the same checks.
 It rejects public staging URLs, shared production resources and destructive
-migrations. It never changes a cloud account.
+migrations, alternate DO lifecycle configuration, external bindings and account
+or Builds-name overrides. It never changes a cloud account. A locally refreshed
+Git reference does not prove the current live Worker matches it; that remains a
+separate authenticated check immediately before any deployment.
+
+The v1 fixture copies the exact baseline HTTP handler, Workflow and original DO
+from Git, checks each source hash, and packages only the private staging v1
+configuration. It has no frontend assets, AV class, production binding, public
+route, or shortened timeout. Its source files match the baseline; its isolated
+bundle is not the original production bundle. The printed fixture directory
+contains a manifest, config and dry-run bundle. Creating it does not run a remote
+migration or create an instance.
 
 Verified locally: 6/6 Workers tests, 9/9 bootstrap guard tests, lint, TypeScript,
 Vite and both explicit-target dry-runs. The Workers tests exercise existing
@@ -83,6 +102,9 @@ No staging deployment, production deployment, migration, or PR merge was run.
    `shion-av-bootstrap-staging`. Its public routes, workers.dev and preview URLs
    are disabled. Start with a reviewed v1 fixture from the pinned baseline to
    test retention across an actual migration, not only a fresh v1+v2 creation.
+   Use `prepare-bootstrap-fixture.mjs` above to prepare its exact v1 source.
+   First inventory the target: stop if it already exists with unreviewed
+   namespaces, bindings, history or retained instances. Never apply v1 over v2.
    Do not deploy this inert bootstrap onto #16's already active AV staging.
 4. Record namespace identity, original snapshot and retained-engine behavior
    before/after, and validate the later full AV implementation on that isolated
